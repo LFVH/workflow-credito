@@ -2,33 +2,41 @@ package br.com.luiz.workflow.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
+
+import org.junit.jupiter.params.provider.Arguments;
 
 class StatusPropostaTest {
 
-    @Test
-    void rascunhoPodeIrParaEmAnalise() {
-        assertThat(StatusProposta.RASCUNHO.podeIrPara(StatusProposta.EM_ANALISE)).isTrue();
+    private static final Map<StatusProposta, Set<StatusProposta>> DESTINOS_ESPERADOS = Map.of(
+        StatusProposta.RASCUNHO, Set.of(StatusProposta.EM_ANALISE, StatusProposta.CANCELADA),
+        StatusProposta.EM_ANALISE, Set.of(StatusProposta.PENDENTE_DOCUMENTOS,
+            StatusProposta.APROVADA, StatusProposta.REPROVADA, StatusProposta.CANCELADA),
+        StatusProposta.PENDENTE_DOCUMENTOS, Set.of(StatusProposta.EM_ANALISE,
+            StatusProposta.CANCELADA),
+        StatusProposta.APROVADA, Set.of(),
+        StatusProposta.REPROVADA, Set.of(),
+        StatusProposta.CANCELADA, Set.of()
+    );
+
+    static Stream<Arguments> todosOsParesDeTransicao() {
+        return Stream.of(StatusProposta.values())
+            .flatMap(origem -> Stream.of(StatusProposta.values())
+                .map(destino -> Arguments.of(origem, destino,
+                    DESTINOS_ESPERADOS.get(origem).contains(destino))));
     }
 
-    @Test
-    void rascunhoNaoPodeIrDiretoParaAprovada() {
-        assertThat(StatusProposta.RASCUNHO.podeIrPara(StatusProposta.APROVADA)).isFalse();
-    }
-    @Test
-    void rascunhoNaoPodeIrDiretoParaPendenteDocumentos() {
-        assertThat(StatusProposta.RASCUNHO.podeIrPara(StatusProposta.PENDENTE_DOCUMENTOS)).isFalse();
-    }
-    @Test
-    void emAnalisePodeIrParaPendenteDocumentos() {
-        assertThat(StatusProposta.EM_ANALISE.podeIrPara(StatusProposta.PENDENTE_DOCUMENTOS)).isTrue();
-    }
-
-    @Test
-    void pendenteDocumentosNaoPodeIrDiretoParaAprovada() {
-        assertThat(StatusProposta.PENDENTE_DOCUMENTOS.podeIrPara(StatusProposta.APROVADA)).isFalse();
+    @ParameterizedTest
+    @MethodSource("todosOsParesDeTransicao")
+    void transicoesCorrespondemATabela(StatusProposta origem, StatusProposta destino,
+            boolean permitido) {
+        assertThat(origem.podeIrPara(destino)).isEqualTo(permitido);
     }
 
     @ParameterizedTest

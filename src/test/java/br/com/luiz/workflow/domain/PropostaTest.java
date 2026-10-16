@@ -37,6 +37,39 @@ class PropostaTest {
     }
 
     @Test
+    void rascunhoPodeSerCancelado() {
+        Proposta p = propostaNova();
+        p.cancelar();
+        assertThat(p.status()).isEqualTo(StatusProposta.CANCELADA);
+    }
+
+    @Test
+    void analisePodeSerCancelada() {
+        Proposta p = propostaNova();
+        p.enviarParaAnalise();
+        p.cancelar();
+        assertThat(p.status()).isEqualTo(StatusProposta.CANCELADA);
+    }
+
+    @Test
+    void pendenciaDeDocumentosPodeVoltarParaAnalise() {
+        Proposta p = propostaNova();
+        p.enviarParaAnalise();
+        p.pedirDocumentos();
+        p.enviarParaAnalise();
+        assertThat(p.status()).isEqualTo(StatusProposta.EM_ANALISE);
+    }
+
+    @Test
+    void pendenciaDeDocumentosPodeSerCancelada() {
+        Proposta p = propostaNova();
+        p.enviarParaAnalise();
+        p.pedirDocumentos();
+        p.cancelar();
+        assertThat(p.status()).isEqualTo(StatusProposta.CANCELADA);
+    }
+
+    @Test
     void naoPodeAprovarDireitoDoRascunho() {
         assertThatThrownBy(() -> propostaNova().aprovar())
             .isInstanceOf(TransicaoInvalidaException.class);
@@ -48,6 +81,15 @@ class PropostaTest {
         p.enviarParaAnalise();
         assertThatThrownBy(() -> p.reprovar("  "))
             .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void analisePodeSerReprovadaComMotivo() {
+        Proposta p = propostaNova();
+        p.enviarParaAnalise();
+        p.reprovar("Renda insuficiente");
+        assertThat(p.status()).isEqualTo(StatusProposta.REPROVADA);
+        assertThat(p.motivoReprovacao()).isEqualTo("Renda insuficiente");
     }
 
     @Test
