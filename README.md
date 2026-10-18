@@ -164,7 +164,7 @@ Resumo dos commits existentes, em ordem cronológica:
 | `a18acd2` `casos de uso de proposta com repositório em memória` | Serviço de aplicação, porta de repositório, adaptador em memória e testes de serviço. |
 | `bad6f53` `Spring Boot, GraphQL e GraphiQL com repositório em memória` | API GraphQL, schema, configuração Spring e GraphiQL. |
 
-## Próximos passos sugeridos
+## Próximos passos
 
 1. Criar o adaptador PostgreSQL atrás de `PropostaRepository`, sem mover regras de negócio para a infraestrutura.
 2. Adicionar testes de integração com Testcontainers para validar persistência e consultas reais.
