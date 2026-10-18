@@ -1,0 +1,31 @@
+enum StatusProposta {
+    RASCUNHO
+    EM_ANALISE
+    PENDENTE_DOCUMENTOS
+    APROVADA
+    REPROVADA
+    CANCELADA
+}
+
+type Proposta {
+    id: ID!
+    valor: Float!
+    prazoMeses: Int!
+    status: StatusProposta!
+    motivoReprovacao: String
+    transicoesPossiveis: [StatusProposta!]!
+}
+
+type Query {
+    proposta(id: ID!): Proposta
+    propostas: [Proposta!]!
+}
+
+type Mutation {
+    criarProposta(valor: Float!, prazoMeses: Int!): Proposta!
+    enviarParaAnalise(id: ID!): Proposta!
+    pedirDocumentos(id: ID!): Proposta!
+    aprovarProposta(id: ID!): Proposta!
+    reprovarProposta(id: ID!, motivo: String!): Proposta!
+    cancelarProposta(id: ID!): Proposta!
+}
