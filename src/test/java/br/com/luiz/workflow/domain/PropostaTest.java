@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.math.BigDecimal;
+import java.util.UUID;
+
 import org.junit.jupiter.api.Test;
 
 class PropostaTest {
@@ -106,5 +108,16 @@ class PropostaTest {
         p.enviarParaAnalise();
         p.aprovar();
         assertThatThrownBy(p::cancelar).isInstanceOf(TransicaoInvalidaException.class);
+    }
+
+    @Test
+    void reconstituirRestauraEstadoSemGerarEventos() {
+        UUID id = UUID.randomUUID();
+        Proposta p = Proposta.reconstituir(id, new BigDecimal("1000"), 12, StatusProposta.REPROVADA, "score baixo");
+
+        assertThat(p.id()).isEqualTo(id);
+        assertThat(p.status()).isEqualTo(StatusProposta.REPROVADA);
+        assertThat(p.motivoReprovacao()).isEqualTo("score baixo");
+        assertThat(p.eventos()).isEmpty();
     }
 }
