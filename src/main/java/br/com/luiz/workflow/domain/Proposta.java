@@ -14,11 +14,17 @@ public class Proposta {
     private String motivoReprovacao;
     private final List<MudancaDeStatus> eventos = new ArrayList<>();
 
-    private Proposta(UUID id, BigDecimal valor, int prazoMeses) {
+    private Proposta(UUID id, BigDecimal valor, int prazoMeses, StatusProposta status, String motivoReprovacao) {
         this.id = id;
         this.valor = valor;
         this.prazoMeses = prazoMeses;
-        this.status = StatusProposta.RASCUNHO;
+        this.status = status;
+        this.motivoReprovacao = motivoReprovacao;
+    }
+
+    public static Proposta reconstituir(UUID id, BigDecimal valor, int prazoMeses,
+                                        StatusProposta status, String motivoReprovacao) {
+        return new Proposta(id, valor, prazoMeses, status, motivoReprovacao);
     }
 
     public static Proposta nova(BigDecimal valor, int prazoMeses) {
@@ -28,7 +34,7 @@ public class Proposta {
         if (prazoMeses < 1 || prazoMeses > 120) {
             throw new IllegalArgumentException("Prazo deve estar entre 1 e 120 meses");
         }
-        return new Proposta(UUID.randomUUID(), valor, prazoMeses);
+        return new Proposta(UUID.randomUUID(), valor, prazoMeses, StatusProposta.RASCUNHO, null);
     }
 
     public void enviarParaAnalise()      { mudarPara(StatusProposta.EM_ANALISE); }
