@@ -42,6 +42,16 @@ class PropostaServiceTest {
     }
 
     @Test
+    void cancelaPropostaComMotivo() {
+        Proposta p = service.criar(new BigDecimal("5000"), 12);
+
+        Proposta cancelada = service.cancelar(p.id(), "Cliente desistiu");
+
+        assertThat(cancelada.status()).isEqualTo(StatusProposta.CANCELADA);
+        assertThat(cancelada.motivo()).isEqualTo("Cliente desistiu");
+    }
+
+    @Test
     void idInexistenteLancaNaoEncontrada() {
         assertThatThrownBy(() -> service.aprovar(UUID.randomUUID()))
             .isInstanceOf(PropostaNaoEncontradaException.class);

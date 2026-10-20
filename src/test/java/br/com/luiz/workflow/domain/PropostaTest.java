@@ -53,7 +53,7 @@ class PropostaTest {
     @Test
     void rascunhoPodeSerCancelado() {
         Proposta p = propostaNova();
-        p.cancelar();
+        p.cancelar("Cliente desistiu");
         assertThat(p.status()).isEqualTo(StatusProposta.CANCELADA);
     }
 
@@ -61,7 +61,7 @@ class PropostaTest {
     void analisePodeSerCancelada() {
         Proposta p = propostaNova();
         p.enviarParaAnalise();
-        p.cancelar();
+        p.cancelar("Cliente desistiu");
         assertThat(p.status()).isEqualTo(StatusProposta.CANCELADA);
     }
 
@@ -79,8 +79,23 @@ class PropostaTest {
         Proposta p = propostaNova();
         p.enviarParaAnalise();
         p.pedirDocumentos();
-        p.cancelar();
+        p.cancelar("Cliente desistiu");
         assertThat(p.status()).isEqualTo(StatusProposta.CANCELADA);
+    }
+
+    @Test
+    void cancelarExigeMotivo() {
+        Proposta p = propostaNova();
+        assertThatThrownBy(() -> p.cancelar(" "))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThat(p.status()).isEqualTo(StatusProposta.RASCUNHO);
+    }
+
+    @Test
+    void cancelamentoGuardaMotivo() {
+        Proposta p = propostaNova();
+        p.cancelar("Cliente desistiu");
+        assertThat(p.motivo()).isEqualTo("Cliente desistiu");
     }
 
     @Test
@@ -103,7 +118,7 @@ class PropostaTest {
         p.enviarParaAnalise();
         p.reprovar("Renda insuficiente");
         assertThat(p.status()).isEqualTo(StatusProposta.REPROVADA);
-        assertThat(p.motivoReprovacao()).isEqualTo("Renda insuficiente");
+        assertThat(p.motivo()).isEqualTo("Renda insuficiente");
     }
 
     @Test
@@ -119,7 +134,7 @@ class PropostaTest {
         Proposta p = propostaNova();
         p.enviarParaAnalise();
         p.aprovar();
-        assertThatThrownBy(p::cancelar).isInstanceOf(TransicaoInvalidaException.class);
+        assertThatThrownBy(() -> p.cancelar("Cliente desistiu")).isInstanceOf(TransicaoInvalidaException.class);
     }
 
     @Test
@@ -129,7 +144,7 @@ class PropostaTest {
 
         assertThat(p.id()).isEqualTo(id);
         assertThat(p.status()).isEqualTo(StatusProposta.REPROVADA);
-        assertThat(p.motivoReprovacao()).isEqualTo("score baixo");
+        assertThat(p.motivo()).isEqualTo("score baixo");
         assertThat(p.eventos()).isEmpty();
     }
 }

@@ -46,6 +46,21 @@ class PropostaRepositoryJpaTest {
     }
 
     @Test
+    void persisteMotivoDoCancelamento() {
+        Proposta p = Proposta.nova(new BigDecimal("1500.50"), 12);
+        p.cancelar("Cliente desistiu");
+        repository.salvar(p);
+        em.flush();
+        em.clear();
+
+        Proposta recuperada = repository.buscarPorId(p.id()).orElseThrow();
+
+        assertThat(recuperada.status()).isEqualTo(StatusProposta.CANCELADA);
+        assertThat(recuperada.motivo()).isEqualTo("Cliente desistiu");
+        assertThat(recuperada.valor()).isEqualByComparingTo("1500.50");
+    }
+
+    @Test
     void idInexistenteRetornaVazio() {
         assertThat(repository.buscarPorId(UUID.randomUUID())).isEmpty();
     }
