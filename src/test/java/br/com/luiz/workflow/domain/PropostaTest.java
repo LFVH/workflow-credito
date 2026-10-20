@@ -26,6 +26,18 @@ class PropostaTest {
     }
 
     @Test
+    void valorComMaisDeDuasCasasDecimaisEhRejeitado() {
+        assertThatThrownBy(() -> Proposta.nova(new BigDecimal("1000.005"), 24))
+            .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void zerosADireitaNasCasasDecimaisNaoContam() {
+        assertThat(Proposta.nova(new BigDecimal("1000.1000"), 24).valor())
+            .isEqualByComparingTo("1000.10");
+    }
+
+    @Test
     void prazoForaDoIntervaloEhRejeitado() {
         assertThatThrownBy(() -> Proposta.nova(new BigDecimal("1000"), 121))
             .isInstanceOf(IllegalArgumentException.class);
