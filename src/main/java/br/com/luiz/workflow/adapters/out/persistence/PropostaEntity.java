@@ -24,8 +24,8 @@ class PropostaEntity {
     @Column(nullable = false)
     private StatusProposta status;
 
-    @Column(name = "motivo_reprovacao")
-    private String motivoReprovacao;
+    @Column(name = "motivo")
+    private String motivo;
 
     @Column(name = "criada_em", insertable = false, updatable = false)
     private Instant criadaEm;
@@ -38,11 +38,11 @@ class PropostaEntity {
         e.valor = p.valor();
         e.prazoMeses = p.prazoMeses();
         e.status = p.status();
-        e.motivoReprovacao = p.motivoReprovacao();
+        e.motivo = p.motivo();
         return e;
     }
 
     Proposta paraDominio() {
-        return Proposta.reconstituir(id, valor, prazoMeses, status, motivoReprovacao);
+        return Proposta.reconstituir(id, valor, prazoMeses, status, motivo);
     }
 }

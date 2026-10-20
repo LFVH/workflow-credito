@@ -11,12 +11,12 @@ public record PropostaPayload(
         BigDecimal valor,
         int prazoMeses,
         StatusProposta status,
-        String motivoReprovacao,
+        String motivo,
         Set<StatusProposta> transicoesPossiveis) {
 
     static PropostaPayload de(Proposta p) {
         return new PropostaPayload(
             p.id(), p.valor(), p.prazoMeses(),
-            p.status(), p.motivoReprovacao(), p.status().destinosPermitidos());
+            p.status(), p.motivo(), p.status().destinosPermitidos());
     }
 }

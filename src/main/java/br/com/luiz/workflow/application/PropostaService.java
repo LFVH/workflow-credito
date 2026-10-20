@@ -23,9 +23,11 @@ public class PropostaService {
     public Proposta enviarParaAnalise(UUID id)  { return transicionar(id, Proposta::enviarParaAnalise); }
     public Proposta pedirDocumentos(UUID id)    { return transicionar(id, Proposta::pedirDocumentos); }
     public Proposta aprovar(UUID id)            { return transicionar(id, Proposta::aprovar); }
-    public Proposta cancelar(UUID id)           { return transicionar(id, Proposta::cancelar); }
     public Proposta reprovar(UUID id, String motivo) {
         return transicionar(id, proposta -> proposta.reprovar(motivo));
+    }
+    public Proposta cancelar(UUID id, String motivo) {
+        return transicionar(id, proposta -> proposta.cancelar(motivo));
     }
 
     public Optional<Proposta> buscar(UUID id) {

@@ -11,20 +11,20 @@ public class Proposta {
     private final BigDecimal valor;
     private final int prazoMeses;
     private StatusProposta status;
-    private String motivoReprovacao;
+    private String motivo;
     private final List<MudancaDeStatus> eventos = new ArrayList<>();
 
-    private Proposta(UUID id, BigDecimal valor, int prazoMeses, StatusProposta status, String motivoReprovacao) {
+    private Proposta(UUID id, BigDecimal valor, int prazoMeses, StatusProposta status, String motivo) {
         this.id = id;
         this.valor = valor;
         this.prazoMeses = prazoMeses;
         this.status = status;
-        this.motivoReprovacao = motivoReprovacao;
+        this.motivo = motivo;
     }
 
     public static Proposta reconstituir(UUID id, BigDecimal valor, int prazoMeses,
-                                        StatusProposta status, String motivoReprovacao) {
-        return new Proposta(id, valor, prazoMeses, status, motivoReprovacao);
+                                        StatusProposta status, String motivo) {
+        return new Proposta(id, valor, prazoMeses, status, motivo);
     }
 
     public static Proposta nova(BigDecimal valor, int prazoMeses) {
@@ -43,14 +43,16 @@ public class Proposta {
     public void enviarParaAnalise()      { mudarPara(StatusProposta.EM_ANALISE); }
     public void pedirDocumentos()        { mudarPara(StatusProposta.PENDENTE_DOCUMENTOS); }
     public void aprovar()                { mudarPara(StatusProposta.APROVADA); }
-    public void cancelar()               { mudarPara(StatusProposta.CANCELADA); }
 
-    public void reprovar(String motivo) {
+    public void reprovar(String motivo) { mudarComMotivo(StatusProposta.REPROVADA, motivo); }
+    public void cancelar(String motivo) { mudarComMotivo(StatusProposta.CANCELADA, motivo); }
+
+    private void mudarComMotivo(StatusProposta destino, String motivo) {
         if (motivo == null || motivo.isBlank()) {
-            throw new IllegalArgumentException("Motivo da reprovação é obrigatório");
+            throw new IllegalArgumentException("Motivo é obrigatório para ir para " + destino);
         }
-        mudarPara(StatusProposta.REPROVADA);
-        this.motivoReprovacao = motivo;
+        mudarPara(destino);
+        this.motivo = motivo;
     }
 
     private void mudarPara(StatusProposta destino) {
@@ -65,6 +67,6 @@ public class Proposta {
     public BigDecimal valor()         { return valor; }
     public int prazoMeses()           { return prazoMeses; }
     public StatusProposta status()    { return status; }
-    public String motivoReprovacao()  { return motivoReprovacao; }
+    public String motivo()            { return motivo; }
     public List<MudancaDeStatus> eventos() { return List.copyOf(eventos); }
 }

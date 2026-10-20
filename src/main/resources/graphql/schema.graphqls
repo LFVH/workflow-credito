@@ -14,7 +14,7 @@ type Proposta {
     valor: Decimal!
     prazoMeses: Int!
     status: StatusProposta!
-    motivoReprovacao: String
+    motivo: String
     transicoesPossiveis: [StatusProposta!]!
 }
 
@@ -29,5 +29,5 @@ type Mutation {
     pedirDocumentos(id: ID!): Proposta!
     aprovarProposta(id: ID!): Proposta!
     reprovarProposta(id: ID!, motivo: String!): Proposta!
-    cancelarProposta(id: ID!): Proposta!
+    cancelarProposta(id: ID!, motivo: String!): Proposta!
 }

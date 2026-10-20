@@ -54,7 +54,7 @@ public class PropostaGraphQlController {
     }
 
     @MutationMapping
-    public PropostaPayload cancelarProposta(@Argument UUID id) {
-        return PropostaPayload.de(service.cancelar(id));
+    public PropostaPayload cancelarProposta(@Argument UUID id, @Argument String motivo) {
+        return PropostaPayload.de(service.cancelar(id, motivo));
     }
 }
