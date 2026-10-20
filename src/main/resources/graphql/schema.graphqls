@@ -1,3 +1,5 @@
+scalar Decimal
+
 enum StatusProposta {
     RASCUNHO
     EM_ANALISE
@@ -9,7 +11,7 @@ enum StatusProposta {
 
 type Proposta {
     id: ID!
-    valor: Float!
+    valor: Decimal!
     prazoMeses: Int!
     status: StatusProposta!
     motivoReprovacao: String
@@ -22,7 +24,7 @@ type Query {
 }
 
 type Mutation {
-    criarProposta(valor: Float!, prazoMeses: Int!): Proposta!
+    criarProposta(valor: Decimal!, prazoMeses: Int!): Proposta!
     enviarParaAnalise(id: ID!): Proposta!
     pedirDocumentos(id: ID!): Proposta!
     aprovarProposta(id: ID!): Proposta!

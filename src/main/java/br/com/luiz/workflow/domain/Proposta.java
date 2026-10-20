@@ -31,6 +31,9 @@ public class Proposta {
         if (valor == null || valor.signum() <= 0) {
             throw new IllegalArgumentException("Valor deve ser maior que zero");
         }
+        if (valor.stripTrailingZeros().scale() > 2) {
+            throw new IllegalArgumentException("Valor deve ter no máximo 2 casas decimais");
+        }
         if (prazoMeses < 1 || prazoMeses > 120) {
             throw new IllegalArgumentException("Prazo deve estar entre 1 e 120 meses");
         }

@@ -29,8 +29,8 @@ public class PropostaGraphQlController {
     }
 
     @MutationMapping
-    public PropostaPayload criarProposta(@Argument double valor, @Argument int prazoMeses) {
-        return PropostaPayload.de(service.criar(BigDecimal.valueOf(valor), prazoMeses));
+    public PropostaPayload criarProposta(@Argument BigDecimal valor, @Argument int prazoMeses) {
+        return PropostaPayload.de(service.criar(valor, prazoMeses));
     }
 
     @MutationMapping
