@@ -1,0 +1,458 @@
+<title>Hexágono da Esteira</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: palco quadrado com o hexágono à esquerda, bancada de controle e ficha da peça à direita; empilha no celular. */
+:root {
+  --bg: #eef0f3;
+  --surface: #ffffff;
+  --ink: #17202c;
+  --muted: #5a6474;
+  --line: #d4d9e0;
+  --dom: #233a66;   --on-dom: #f2f5fb;
+  --port: #2c7a6b;  --on-port: #f2fbf8;
+  --adp: #e3ae4f;   --on-adp: #231a08;
+  --plan: rgba(90,100,116,.08);
+  --accent: #c8336a;
+  --err: #c92a2a;
+  --display: "Archivo", "Arial Narrow", system-ui, sans-serif;
+  --body: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10141a; --surface: #181e26; --ink: #e5e9ef; --muted: #98a2b0; --line: #29313c;
+    --dom: #4767b0; --on-dom: #f2f5fb; --port: #2f9a86; --on-port: #04120e;
+    --adp: #e2b25c; --on-adp: #1b1406; --plan: rgba(152,162,176,.07);
+    --accent: #f06595; --err: #ff6b6b; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10141a; --surface: #181e26; --ink: #e5e9ef; --muted: #98a2b0; --line: #29313c;
+  --dom: #4767b0; --on-dom: #f2f5fb; --port: #2f9a86; --on-port: #04120e;
+  --adp: #e2b25c; --on-adp: #1b1406; --plan: rgba(152,162,176,.07);
+  --accent: #f06595; --err: #ff6b6b; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--body);
+  font-size: 15px; line-height: 1.5;
+}
+.wrap {
+  max-width: 1180px; margin: 0 auto;
+  padding-block: 28px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 24px;
+}
+header { display: grid; gap: 6px; max-width: 68ch; }
+.eyebrow {
+  font-family: var(--mono); font-size: 12px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--muted);
+}
+h1 {
+  font-family: var(--display); font-stretch: 72%; font-weight: 800;
+  font-size: clamp(30px, 5.2vw, 52px); line-height: 1; margin: 0;
+  letter-spacing: -.01em; text-wrap: balance;
+}
+.lede { margin: 4px 0 0; color: var(--muted); }
+
+.main { display: grid; gap: 24px; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 880px) { .main { grid-template-columns: minmax(0, 1fr); } }
+
+.stage {
+  position: relative; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 6px; overflow: hidden; aspect-ratio: 1; max-width: 100%;
+}
+.stage svg { width: 100%; height: 100%; display: block; overflow: visible; }
+
+.piece { cursor: pointer; transform-box: fill-box; transform-origin: center;
+  transition: transform 950ms cubic-bezier(.2,.85,.25,1), opacity 500ms ease; outline: none; }
+.piece polygon { stroke: var(--surface); stroke-width: 5; stroke-linejoin: round; transition: fill 200ms, stroke 200ms; }
+.piece text { pointer-events: none; font-family: var(--display); font-stretch: 78%; }
+.piece .t { font-weight: 700; font-size: 13px; }
+.piece .s { font-size: 9.5px; font-weight: 500; opacity: .82; font-family: var(--body); font-stretch: 85%; }
+.ring0 .t { font-size: 11.5px; }
+.ring0 .s { font-size: 8.5px; }
+.ring0 polygon { fill: var(--dom); }  .ring0 text { fill: var(--on-dom); }
+.ring1 polygon { fill: var(--port); } .ring1 text { fill: var(--on-port); }
+.ring2 polygon { fill: var(--adp); }  .ring2 text { fill: var(--on-adp); }
+.ring3 polygon { fill: var(--plan); stroke: var(--muted); stroke-width: 1.4; stroke-dasharray: 5 4; }
+.ring3 text { fill: var(--muted); }
+.piece:hover polygon, .piece:focus-visible polygon { filter: brightness(1.1); }
+.piece.sel polygon, .piece:focus-visible polygon { stroke: var(--ink); stroke-width: 3; }
+.piece.ring3.sel polygon { stroke-dasharray: none; }
+.piece.off { opacity: .9; }
+.hide-plan .ring3 { opacity: 0; pointer-events: none; }
+.sim .piece:not(.lit) { opacity: .35; }
+.piece.lit polygon { stroke: var(--accent); stroke-width: 4; }
+.piece.bad polygon { stroke: var(--err); stroke-width: 4; }
+#dot { fill: var(--accent); transition: opacity 200ms; }
+#dot.bad { fill: var(--err); }
+.ring-label { font-family: var(--mono); font-size: 9px; fill: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 18px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 7px; }
+.sw { width: 14px; height: 14px; border-radius: 2px; display: inline-block; }
+.sw.d { background: var(--dom); } .sw.p { background: var(--port); } .sw.a { background: var(--adp); }
+.sw.x { border: 1.4px dashed var(--muted); background: var(--plan); }
+
+aside { display: grid; gap: 18px; min-width: 0; }
+.block { display: grid; gap: 10px; }
+.label { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.row { display: flex; flex-wrap: wrap; gap: 8px; }
+button {
+  font: inherit; font-size: 14px; font-weight: 600; color: var(--ink);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 4px;
+  padding: 7px 12px; cursor: pointer;
+}
+button:hover { border-color: var(--muted); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.phases { display: grid; gap: 6px; }
+.phase {
+  display: grid; grid-template-columns: 74px minmax(0,1fr); gap: 10px; align-items: baseline;
+  text-align: left; font-weight: 500; padding: 8px 12px;
+}
+.phase b { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--muted); }
+.phase[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 3px 0 0 var(--ink); }
+.toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); cursor: pointer; }
+.toggle input { accent-color: var(--ink); width: 16px; height: 16px; }
+
+.card {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+  padding: 16px 18px; display: grid; gap: 8px; min-height: 190px;
+}
+.card h2 { font-family: var(--display); font-stretch: 75%; font-size: 26px; font-weight: 800; margin: 0; line-height: 1.1; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 3px; border: 1px solid var(--line); color: var(--muted); }
+.chip.k0 { background: var(--dom); color: var(--on-dom); border-color: transparent; }
+.chip.k1 { background: var(--port); color: var(--on-port); border-color: transparent; }
+.chip.k2 { background: var(--adp); color: var(--on-adp); border-color: transparent; }
+.chip.k3 { border-style: dashed; }
+.card p { margin: 0; }
+code, .path { font-family: var(--mono); font-size: 12.5px; }
+.path { color: var(--muted); overflow-wrap: anywhere; }
+
+.log { margin: 0; padding: 0 0 0 22px; display: grid; gap: 4px; font-size: 14px; min-height: 24px; }
+.log li { color: var(--muted); }
+.log li.now { color: var(--ink); font-weight: 600; }
+.log li.err { color: var(--err); font-weight: 600; }
+.log code { font-size: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .piece { transition: opacity 200ms; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">workflow-credito · arquitetura hexagonal</div>
+    <h1>Hexágono da Esteira de Crédito</h1>
+    <p class="lede">Cada peça é uma parte real do projeto. O domínio fica no centro, em Java puro. Os casos de uso e o port cercam o domínio, e Spring, GraphQL e PostgreSQL encaixam por fora como adaptadores.</p>
+  </header>
+
+  <div class="main">
+    <div class="block">
+      <div class="stage" id="stage">
+        <svg id="hex" viewBox="-360 -360 720 720" role="img" aria-label="Hexágono montado com as peças do projeto"></svg>
+      </div>
+      <div class="legend">
+        <span><i class="sw d"></i>Domínio (Java puro)</span>
+        <span><i class="sw p"></i>Casos de uso e port</span>
+        <span><i class="sw a"></i>Adaptadores</span>
+        <span><i class="sw x"></i>Planejado</span>
+      </div>
+    </div>
+
+    <aside>
+      <div class="block">
+        <div class="label">Montagem</div>
+        <div class="row">
+          <button class="primary" id="btnBuild">Montar fase a fase</button>
+          <button id="btnAll">Montar tudo</button>
+          <button id="btnApart">Desmontar</button>
+        </div>
+        <div class="phases" id="phases"></div>
+        <label class="toggle"><input type="checkbox" id="showPlan" checked> Mostrar peças planejadas</label>
+      </div>
+
+      <div class="card" id="card" aria-live="polite"></div>
+
+      <div class="block">
+        <div class="label">Simular <code>cancelarProposta</code></div>
+        <div class="row">
+          <button id="simOk">Com motivo</button>
+          <button id="simErr">Sem motivo</button>
+        </div>
+        <ol class="log" id="log" aria-live="polite"></ol>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<script>
+(() => {
+  const RINGS = [[0, 135], [135, 200], [200, 280], [280, 340]];
+  const LAYERS = ['Domínio', 'Casos de uso e port', 'Adaptador', 'Planejado'];
+  const PHASES = [
+    { n: 1, tag: 'Fase 1', name: 'Domínio puro com TDD' },
+    { n: 2, tag: 'Fase 2', name: 'Casos de uso, port e GraphQL' },
+    { n: 3, tag: 'Fase 3', name: 'PostgreSQL, JPA, Flyway e CI' },
+    { n: 5, tag: 'Fases 5–6', name: 'Outbox, Kafka e Gateway (planejado)' },
+  ];
+  const D = 'br/com/luiz/workflow/';
+  const PIECES = [
+    // Domínio
+    { id: 'java', ring: 0, a: 240, ph: 1, t: 'Java 21', s: 'sem Spring, sem banco', f: 'src/main/java/' + D + 'domain/',
+      d: 'O núcleo é Java puro: enum, record e classes simples. Nenhuma anotação de framework entra aqui, por isso dá para testar tudo sem subir o Spring.' },
+    { id: 'tdd', ring: 0, a: 300, ph: 1, t: 'TDD', s: 'JUnit 5 + AssertJ', f: 'src/test/java/' + D + 'domain/',
+      d: 'Cada regra nasceu de um teste vermelho. StatusPropostaTest cobre a tabela de transições inteira e PropostaTest cobre validações e eventos.' },
+    { id: 'status', ring: 0, a: 0, ph: 1, t: 'StatusProposta', s: 'máquina de estados', f: D + 'domain/StatusProposta.java',
+      d: 'Um enum com destinosPermitidos(), podeIrPara() e ehFinal(). RASCUNHO → EM_ANALISE ⇄ PENDENTE_DOCUMENTOS → APROVADA | REPROVADA | CANCELADA, escrito à mão.' },
+    { id: 'evento', ring: 0, a: 60, ph: 1, t: 'MudancaDeStatus', s: 'evento (record)', f: D + 'domain/MudancaDeStatus.java',
+      d: 'Toda transição registra um evento com o status de origem e o de destino. Na fase 5 ele vai para a tabela outbox.' },
+    { id: 'regras', ring: 0, a: 120, ph: 1, t: 'Regras', s: 'valor · prazo · motivo', f: D + 'domain/Proposta.java',
+      d: 'Valor maior que zero e com até 2 casas, prazo de 1 a 120 meses, motivo obrigatório para reprovar e para cancelar. Transição fora da tabela lança TransicaoInvalidaException.' },
+    { id: 'proposta', ring: 0, a: 180, ph: 1, t: 'Proposta', s: 'agregado', f: D + 'domain/Proposta.java',
+      d: 'nova() valida a criação, reconstituir() restaura do banco sem gerar eventos, e todas as transições passam por mudarPara().' },
+    // Casos de uso e port
+    { id: 'uc-criar', ring: 1, a: 240, ph: 2, t: 'criar', s: 'caso de uso', f: D + 'application/PropostaService.java',
+      d: 'PropostaService.criar(valor, prazo) monta Proposta.nova e salva pelo port. O service é Java puro, sem anotações; quem o cria é o BeansConfig.' },
+    { id: 'uc-analise', ring: 1, a: 300, ph: 2, t: 'enviar · pedir docs', s: 'casos de uso', f: D + 'application/PropostaService.java',
+      d: 'enviarParaAnalise e pedirDocumentos fazem o vaivém entre EM_ANALISE e PENDENTE_DOCUMENTOS. Os dois usam transicionar(id, ação): busca, aplica a regra e salva.' },
+    { id: 'port-repo', ring: 1, a: 0, ph: 2, t: 'PropostaRepository', s: 'port de saída', f: D + 'application/port/out/PropostaRepository.java',
+      d: 'A interface que a aplicação define e a infraestrutura implementa. Trocar o repositório em memória pelo JPA não mexeu em nenhuma linha do service.' },
+    { id: 'uc-aprovar', ring: 1, a: 60, ph: 2, t: 'aprovar', s: 'caso de uso', f: D + 'application/PropostaService.java',
+      d: 'Só funciona a partir de EM_ANALISE. Aprovar direto do rascunho lança TransicaoInvalidaException, e o teste aprovarSemPassarPorAnaliseFalha garante isso.' },
+    { id: 'uc-reprovar', ring: 1, a: 120, ph: 2, t: 'reprovar', s: 'caso de uso · exige motivo', f: D + 'application/PropostaService.java',
+      d: 'reprovar(id, motivo) delega para Proposta.reprovar, que recusa motivo vazio antes de mudar o status.' },
+    { id: 'uc-cancelar', ring: 1, a: 180, ph: 2, t: 'cancelar', s: 'caso de uso · exige motivo', f: D + 'application/PropostaService.java',
+      d: 'cancelar(id, motivo) vale para RASCUNHO, EM_ANALISE e PENDENTE_DOCUMENTOS. O motivo passou a ser obrigatório, igual ao da reprovação.' },
+    // Adaptadores
+    { id: 'gql', ring: 2, a: 180, ph: 2, t: 'Spring for GraphQL', s: 'entrada · GraphiQL', f: D + 'adapters/in/graphql/',
+      d: 'schema.graphqls, PropostaGraphQlController e GraphQlErrorHandler. O scalar Decimal garante que o valor nunca vira double no caminho.' },
+    { id: 'boot', ring: 2, a: 120, ph: 2, t: 'Spring Boot 3.5', s: 'BeansConfig · Maven', f: D + 'config/BeansConfig.java',
+      d: 'Liga as peças: cria o PropostaService recebendo o port. O Spring fica na borda e o miolo não sabe que ele existe.' },
+    { id: 'jpa', ring: 2, a: 0, ph: 3, t: 'Spring Data JPA', s: 'saída · Hibernate', f: D + 'adapters/out/persistence/',
+      d: 'PropostaEntity mora no adaptador, então o domínio continua sem @Entity. PropostaRepositoryJpa traduz entre entidade e domínio.' },
+    { id: 'pg', ring: 2, a: 300, ph: 3, t: 'PostgreSQL + Flyway', s: 'migrations em SQL puro', f: 'src/main/resources/db/migration/',
+      d: 'As constraints espelham o domínio: CHECK de valor, prazo e status na V1. A V2 renomeia a coluna para motivo e exige motivo em REPROVADA e CANCELADA (NOT VALID, para não barrar os registros antigos).' },
+    { id: 'tc', ring: 2, a: 60, ph: 3, t: 'Testcontainers', s: 'Postgres 16 real', f: 'src/test/java/' + D + 'adapters/out/persistence/PropostaRepositoryJpaTest.java',
+      d: '@DataJpaTest contra um Postgres de verdade em container. No notebook sem Docker o teste é pulado (disabledWithoutDocker) e no CI ele roda.' },
+    { id: 'ci', ring: 2, a: 240, ph: 3, t: 'GitHub Actions', s: 'CI a cada push', f: '.github/workflows/ci.yml',
+      d: 'Roda mvn test numa máquina com Docker, então é ali que os testes de integração rodam de verdade.' },
+    // Planejado
+    { id: 'kafka', ring: 3, a: 0, ph: 5, t: 'Kafka', s: 'fase 5', f: 'planejado',
+      d: 'Recebe os eventos de proposta que o relay do outbox publica. Roda no Codespaces, porque não cabe nos 4 GB de RAM do notebook.' },
+    { id: 'outbox', ring: 3, a: 60, ph: 5, t: 'Outbox', s: 'fase 5 · mesma transação', f: 'planejado',
+      d: 'MudancaDeStatus é gravado na mesma transação da proposta, e um relay lê a tabela e publica no Kafka. Assim o evento nunca se perde nem sai duplicado da aplicação.' },
+    { id: 'tx', ring: 3, a: 300, ph: 5, t: '@Transactional', s: 'fase 5 · pré-requisito', f: 'planejado',
+      d: 'Hoje buscar e salvar rodam em transações separadas. O outbox exige uma transação só, montada no BeansConfig ou num decorator para o service continuar sem anotações.' },
+    { id: 'gw', ring: 3, a: 180, ph: 5, t: 'Spring Cloud Gateway', s: 'fase 6', f: 'planejado',
+      d: 'Porta de entrada na frente da API GraphQL, na mesma stack Spring.' },
+    { id: 'compose', ring: 3, a: 120, ph: 5, t: 'Docker Compose', s: 'fase 6', f: 'planejado',
+      d: 'Sobe app, Postgres e Kafka juntos com um comando.' },
+    { id: 'contrato', ring: 3, a: 240, ph: 5, t: 'Contrato', s: 'desafio opcional', f: 'planejado',
+      d: 'GERADO → ASSINADO → ATIVO → LIQUIDADO | CANCELADO, nascendo de uma proposta aprovada. Domínio, port, adaptador JPA e migration V3.' },
+  ];
+
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.getElementById('hex');
+  const stage = document.getElementById('stage');
+  const card = document.getElementById('card');
+  const log = document.getElementById('log');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const rad = d => d * Math.PI / 180;
+  const P = (r, deg) => [r * Math.cos(rad(deg)), r * Math.sin(rad(deg))];
+  const sleep = ms => new Promise(res => setTimeout(res, ms));
+  let run = 0; // invalida sequências antigas quando o usuário clica em outra coisa
+
+  function el(tag, attrs, parent) {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(n);
+    return n;
+  }
+
+  function textRotation(a) {
+    let r = (((a + 90 + 180) % 360) + 360) % 360 - 180;
+    if (r > 90) r -= 180;
+    if (r < -90) r += 180;
+    return r;
+  }
+
+  // Desenha do anel externo para o centro, para o domínio ficar por cima.
+  const byId = {};
+  [...PIECES].sort((x, y) => y.ring - x.ring).forEach(p => {
+    const [r1, r2] = RINGS[p.ring];
+    const pts = p.ring === 0
+      ? [[0, 0], P(r2, p.a - 30), P(r2, p.a + 30)]
+      : [P(r1, p.a - 30), P(r2, p.a - 30), P(r2, p.a + 30), P(r1, p.a + 30)];
+    const lr = p.ring === 0 ? r2 * 0.866 * 0.6 : (r1 + r2) / 2 * 0.866;
+    const [lx, ly] = P(lr, p.a);
+    p.lx = lx; p.ly = ly;
+
+    const g = el('g', { class: 'piece ring' + p.ring, tabindex: 0, role: 'button', 'aria-label': p.t + ', ' + LAYERS[p.ring] }, svg);
+    el('polygon', { points: pts.map(q => q.map(v => v.toFixed(1)).join(',')).join(' ') }, g);
+    const tx = el('text', { x: lx, y: ly, 'text-anchor': 'middle', transform: `rotate(${textRotation(p.a)} ${lx} ${ly})` }, g);
+    const t1 = el('tspan', { class: 't', x: lx, dy: '-0.15em' }, tx); t1.textContent = p.t;
+    const t2 = el('tspan', { class: 's', x: lx, dy: '1.45em' }, tx); t2.textContent = p.s;
+
+    p.g = g; byId[p.id] = p;
+    g.addEventListener('click', () => select(p));
+    g.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); select(p); } });
+    g.addEventListener('pointerenter', () => { if (!sel) show(p); });
+    g.addEventListener('pointerleave', () => { if (!sel) intro(); });
+  });
+  const dot = el('circle', { id: 'dot', r: 9, cx: -350, cy: 0, opacity: 0 }, svg);
+
+  // Ficha da peça
+  let sel = null;
+  function show(p) {
+    const ph = PHASES.find(x => x.n === p.ph);
+    card.innerHTML = `
+      <div class="meta"><span class="chip k${p.ring}">${LAYERS[p.ring]}</span><span class="chip">${ph.tag}</span></div>
+      <h2>${p.t}</h2>
+      <p>${p.d}</p>
+      <div class="path">${p.f}</div>`;
+  }
+  function intro() {
+    card.innerHTML = `
+      <div class="meta"><span class="chip">Toque numa peça</span></div>
+      <h2>Por que um hexágono?</h2>
+      <p>As regras de crédito ficam no centro e não dependem de nada. Tudo o que é tecnologia encaixa por fora através de um port. Por isso dá para trocar o repositório em memória pelo PostgreSQL sem mexer na Proposta.</p>
+      <div class="path">24 peças · 18 no código · 6 planejadas</div>`;
+  }
+  function select(p) {
+    if (sel) sel.g.classList.remove('sel');
+    sel = sel === p ? null : p;
+    if (sel) { sel.g.classList.add('sel'); show(sel); } else intro();
+  }
+
+  // Montagem
+  const order = [...PIECES].sort((x, y) => x.ph - y.ph || x.ring - y.ring || x.a - y.a);
+  let phase = 5;
+  function scatter(p) {
+    const a = p.a + (Math.random() * 70 - 35);
+    const dist = 250 + Math.random() * 170 - p.ring * 25;
+    const [dx, dy] = P(dist, a);
+    p.off = `translate(${dx.toFixed(0)}px, ${dy.toFixed(0)}px) rotate(${(Math.random() * 280 - 140).toFixed(0)}deg) scale(.82)`;
+  }
+  function setPhase(n, { instant = false, stagger = 55 } = {}) {
+    phase = n;
+    let i = 0;
+    order.forEach(p => {
+      const placed = p.ph <= n;
+      const wasPlaced = !p.g.classList.contains('off');
+      if (!placed && (wasPlaced || !p.off)) scatter(p);
+      p.g.style.transition = instant ? 'none' : '';
+      p.g.style.transitionDelay = instant || placed === wasPlaced ? '0ms' : (i++ * stagger) + 'ms';
+      p.g.style.transform = placed ? 'none' : p.off;
+      p.g.classList.toggle('off', !placed);
+    });
+    if (instant) svg.getBoundingClientRect();
+    document.querySelectorAll('.phase').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.n === n)));
+  }
+
+  const phasesEl = document.getElementById('phases');
+  PHASES.forEach(ph => {
+    const b = document.createElement('button');
+    b.className = 'phase'; b.dataset.n = ph.n; b.setAttribute('aria-pressed', 'false');
+    b.innerHTML = `<b>${ph.tag}</b><span>${ph.name}</span>`;
+    b.addEventListener('click', () => { run++; clearSim(); setPhase(ph.n); });
+    phasesEl.appendChild(b);
+  });
+
+  async function buildByPhase() {
+    const me = ++run; clearSim();
+    setPhase(0, { stagger: 18 });
+    await sleep(reduce ? 200 : 900);
+    for (const ph of PHASES) {
+      if (me !== run) return;
+      setPhase(ph.n);
+      await sleep(reduce ? 500 : 1700);
+    }
+  }
+  document.getElementById('btnBuild').onclick = buildByPhase;
+  document.getElementById('btnAll').onclick = () => { run++; clearSim(); setPhase(5, { stagger: 30 }); };
+  document.getElementById('btnApart').onclick = () => { run++; clearSim(); setPhase(0, { stagger: 25 }); };
+  document.getElementById('showPlan').onchange = e => stage.classList.toggle('hide-plan', !e.target.checked);
+
+  // Simulação de uma requisição atravessando as camadas
+  const OK = [
+    ['gql', 'Chega <code>cancelarProposta(id, motivo)</code> pelo GraphQL'],
+    ['uc-cancelar', '<code>PropostaService.cancelar</code> busca a proposta pelo port'],
+    ['proposta', '<code>Proposta.cancelar(motivo)</code> confere o motivo'],
+    ['status', '<code>podeIrPara(CANCELADA)</code> autoriza a transição'],
+    ['evento', 'Registra <code>MudancaDeStatus</code> na memória'],
+    ['port-repo', 'O service chama <code>salvar()</code> no port'],
+    ['jpa', 'O adaptador converte para <code>PropostaEntity</code>'],
+    ['pg', '<code>UPDATE</code> passa no CHECK <code>ck_proposta_motivo_obrigatorio</code>'],
+  ];
+  const ERR = [
+    ['gql', 'Chega <code>cancelarProposta(id, motivo: "")</code>'],
+    ['uc-cancelar', '<code>PropostaService.cancelar</code> busca a proposta pelo port'],
+    ['proposta', '<code>IllegalArgumentException</code>: motivo é obrigatório', true],
+    ['gql', '<code>GraphQlErrorHandler</code> responde <code>BAD_REQUEST</code>, sem tocar no banco', true],
+  ];
+
+  function clearSim() {
+    stage.classList.remove('sim');
+    PIECES.forEach(p => p.g.classList.remove('lit', 'bad'));
+    dot.setAttribute('opacity', 0);
+    dot.classList.remove('bad');
+  }
+  function moveDot(x0, y0, x1, y1, ms, me) {
+    return new Promise(res => {
+      if (reduce) { dot.setAttribute('cx', x1); dot.setAttribute('cy', y1); return res(); }
+      const t0 = performance.now();
+      const step = now => {
+        if (me !== run) return res();
+        const k = Math.min(1, (now - t0) / ms), e = k < .5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+        dot.setAttribute('cx', x0 + (x1 - x0) * e);
+        dot.setAttribute('cy', y0 + (y1 - y0) * e);
+        k < 1 ? requestAnimationFrame(step) : res();
+      };
+      requestAnimationFrame(step);
+    });
+  }
+  async function simulate(steps) {
+    const me = ++run;
+    clearSim();
+    if (phase < 3) { setPhase(5, { stagger: 25 }); await sleep(1300); if (me !== run) return; }
+    log.innerHTML = '';
+    stage.classList.add('sim');
+    let x = -350, y = 0;
+    dot.setAttribute('cx', x); dot.setAttribute('cy', y); dot.setAttribute('opacity', 1);
+    for (const [id, msg, bad] of steps) {
+      const p = byId[id];
+      await moveDot(x, y, p.lx, p.ly, 650, me);
+      if (me !== run) return;
+      x = p.lx; y = p.ly;
+      p.g.classList.add(bad ? 'bad' : 'lit');
+      if (bad) dot.classList.add('bad');
+      log.querySelectorAll('li').forEach(li => li.classList.remove('now'));
+      const li = document.createElement('li');
+      li.innerHTML = msg; li.className = bad ? 'err' : 'now';
+      log.appendChild(li);
+      await sleep(reduce ? 300 : 700);
+    }
+    const li = document.createElement('li');
+    li.className = 'now';
+    li.textContent = steps === OK ? 'Proposta CANCELADA e persistida com o motivo.' : 'Proposta continua como estava.';
+    log.querySelectorAll('li').forEach(l => l.classList.remove('now'));
+    log.appendChild(li);
+  }
+  document.getElementById('simOk').onclick = () => simulate(OK);
+  document.getElementById('simErr').onclick = () => simulate(ERR);
+  stage.addEventListener('click', e => { if (e.target === svg && stage.classList.contains('sim')) { run++; clearSim(); } });
+
+  intro();
+  if (reduce) setPhase(5, { instant: true });
+  else { setPhase(0, { instant: true }); setTimeout(buildByPhase, 350); }
+})();
+</script>

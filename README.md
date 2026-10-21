@@ -1,12 +1,12 @@
 # Workflow de Crédito
 
-Serviço de propostas de crédito em evolução para um serviço de contratos. O projeto usa Java, Spring Boot e GraphQL para expor as operações de proposta, com regras de negócio concentradas no domínio.
+Projeto de estudo prático de uma esteira de crédito, desenvolvido para exercitar Java, Spring Boot, arquitetura hexagonal, persistência relacional, testes e mensageria em um domínio financeiro.
 
-> **Estado atual:** domínio e máquina de estados implementados com testes; casos de uso, porta de repositório e adaptador em memória integrados ao Spring Boot e GraphQL. PostgreSQL, contratos e testes com Testcontainers ainda fazem parte do objetivo, mas não estão implementados nesta versão.
+> **Estado atual:** fases 1, 2 e 3 concluídas. A aplicação já tem domínio e casos de uso, API GraphQL, persistência PostgreSQL com JPA e migrations Flyway. A fase 4 será a implementação do padrão Outbox e publicação de eventos com Kafka.
 
 ## Objetivo
 
-Construir um serviço de contratos com propostas e contratos, fluxo de estados explícito e arquitetura hexagonal, desenvolvendo as regras com TDD e validando a persistência com PostgreSQL e Testcontainers.
+O objetivo é aprender e praticar, de forma incremental, a construção de um backend para gerenciar propostas de crédito. O projeto não é apresentado como solução pronta para uso em produção: serve como laboratório para aplicar TDD, arquitetura hexagonal, GraphQL, PostgreSQL, migrations, testes de integração e mensageria.
 
 ## Estado do projeto
 
@@ -19,21 +19,27 @@ Construir um serviço de contratos com propostas e contratos, fluxo de estados e
 - Mudanças de estado são registradas como `MudancaDeStatus` na instância da proposta.
 - Testes cobrem validações, transições permitidas e inválidas e estados finais.
 
-### Fase 2: aplicação e API
+### Fase 2: aplicação e API GraphQL
 
 - `PropostaService` implementa criação, consulta, listagem e transições.
 - `PropostaRepository` define a porta de saída para persistência.
-- `PropostaRepositoryEmMemoria` implementa essa porta com armazenamento em memória.
-- Spring Boot configura o serviço e o adaptador em memória.
 - A API GraphQL expõe consultas e mutações para propostas; GraphiQL está habilitado.
 - Tratamento GraphQL converte regras inválidas em `BAD_REQUEST` e propostas inexistentes em `NOT_FOUND`.
 
-### Ainda por implementar
+### Fase 3: PostgreSQL e persistência
 
-- Adaptador de persistência PostgreSQL, mapeamento e configuração de banco.
-- Testes de integração de persistência com Testcontainers.
-- Modelo e fluxo de contratos, além do ciclo de vida atualmente coberto para propostas.
-- Evolução da arquitetura hexagonal com os adaptadores necessários para esses novos recursos.
+- Adaptador JPA implementa a porta `PropostaRepository` e persiste propostas no PostgreSQL.
+- Flyway aplica migrations SQL com constraints e índices do banco.
+- GraphQL trabalha com a persistência PostgreSQL, em vez do armazenamento em memória.
+- Testes de integração verificam a persistência usando PostgreSQL via Testcontainers; eles são ignorados quando Docker não está disponível.
+
+### Fase 4: Outbox e Kafka
+
+- Persistir os eventos de domínio na mesma transação da proposta usando o padrão Outbox.
+- Publicar os eventos da Outbox em um tópico Kafka por meio de um relay.
+- Validar o fluxo entre transação, persistência do evento e publicação.
+
+O modelo de `Contrato` e outras extensões do domínio podem ser explorados em etapas posteriores.
 
 ## Máquina de estados
 
@@ -48,7 +54,7 @@ Construir um serviço de contratos com propostas e contratos, fluxo de estados e
 
 ## Arquitetura e estrutura
 
-O núcleo de domínio não depende do Spring. A aplicação depende da porta `PropostaRepository`, enquanto os adaptadores implementam entrada GraphQL e saída em memória. Isso estabelece as fronteiras principais da arquitetura hexagonal; a persistência PostgreSQL ainda não está conectada.
+O núcleo de domínio não depende do Spring. A aplicação depende da porta `PropostaRepository`; os adaptadores implementam a entrada GraphQL e a saída JPA/PostgreSQL. O Flyway gerencia a evolução do schema. A Outbox e o relay Kafka são o próximo passo do projeto.
 
 ```text
 src/main/java/br/com/luiz/workflow/
@@ -63,25 +69,28 @@ src/main/java/br/com/luiz/workflow/
 |   `-- port/out/PropostaRepository.java  # Porta de persistência
 |-- adapters/
 |   |-- in/graphql/                      # API GraphQL e payloads
-|   `-- out/memory/                      # Repositório em memória
+|   `-- out/persistence/                 # Adaptador JPA e entidades
 |-- config/BeansConfig.java              # Montagem das dependências
 `-- WorkflowApplication.java
 
 src/main/resources/
 |-- graphql/schema.graphqls              # Contrato da API
-`-- application.properties               # GraphiQL habilitado
+|-- db/migration/                        # Migrations Flyway
+`-- application.properties               # GraphiQL e conexão PostgreSQL
 
 src/test/java/br/com/luiz/workflow/
 |-- domain/                              # Testes de regras e transições
-`-- application/                         # Testes dos casos de uso
+|-- application/                         # Testes dos casos de uso
+`-- adapters/out/persistence/            # Testes de integração JPA/PostgreSQL
 ```
 
 ## Requisitos
 
 - Java 21
 - Maven 3.6.3 ou superior
+- PostgreSQL para executar a aplicação (configurado em `localhost:5433`, banco `workflow_db`)
 
-Não é necessário iniciar PostgreSQL na versão atual: o repositório configurado é em memória. Os dados são perdidos quando a aplicação termina.
+As credenciais podem ser configuradas pelas variáveis `DB_USER` e `DB_PASSWORD`; os valores padrão são `postgres` para ambas. As migrations do Flyway são aplicadas ao iniciar a aplicação.
 
 ## Executar
 
@@ -147,26 +156,10 @@ Executar a suíte:
 mvn test
 ```
 
-Na última validação da documentação, a suíte executou **57 testes sem falhas**: testes de domínio e testes dos casos de uso. Ainda não há testes de integração com PostgreSQL/Testcontainers.
-
-## Histórico de implementação
-
-Resumo dos commits existentes, em ordem cronológica:
-
-| Commit | Entrega |
-| --- | --- |
-| `1373a17` `estrutura inicial` | Estrutura Maven e `.gitignore`. |
-| `fb64b29` `working pom` | Ajustes iniciais do `pom.xml`. |
-| `e05885b` `StatusProposta com tabela de transições` | Estados e destinos permitidos, acompanhados de testes. |
-| `287286a` `exceção de transição inválida e evento MudancaDeStatus` | Exceção de transição e registro de mudança de estado. |
-| `c92103a` `Proposta com validações, transições e eventos` | Entidade `Proposta`, validações e regras de transição. |
-| `7f1e0eb` `nova bateria de tests cobrindo todos os casos de transicao de status de proposta` | Ampliação dos testes da máquina de estados. |
-| `a18acd2` `casos de uso de proposta com repositório em memória` | Serviço de aplicação, porta de repositório, adaptador em memória e testes de serviço. |
-| `bad6f53` `Spring Boot, GraphQL e GraphiQL com repositório em memória` | API GraphQL, schema, configuração Spring e GraphiQL. |
+Os testes de integração da persistência usam Testcontainers. Em ambientes sem Docker, essa classe é ignorada pela configuração do teste; os testes de domínio e aplicação continuam disponíveis.
 
 ## Próximos passos
 
-1. Criar o adaptador PostgreSQL atrás de `PropostaRepository`, sem mover regras de negócio para a infraestrutura.
-2. Adicionar testes de integração com Testcontainers para validar persistência e consultas reais.
-3. Definir o domínio de `Contrato` e como a aprovação de uma proposta se relaciona à criação do contrato.
-4. Decidir se o histórico de mudanças de estado deve continuar sendo um registro em memória ou passar a ter persistência própria.
+1. Implementar a Outbox para gravar eventos na mesma transação que altera a proposta.
+2. Criar o relay que publica os eventos persistidos em Kafka.
+3. Testar o fluxo e documentar as decisões e garantias do padrão Outbox.
