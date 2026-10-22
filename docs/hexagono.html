@@ -1,5 +1,10 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Hexágono da Esteira</title>
-<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="Apresentação interativa da arquitetura hexagonal do WorkFlow Crédito (Java 21, Spring Boot 3, PostgreSQL): 24 peças reais do código montadas fase a fase, com simulação de uma requisição atravessando as camadas.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -37,6 +42,9 @@
 }
 
 * { box-sizing: border-box; }
+.embedded .wrap > header { display: none; }
+.embedded .wrap { padding-block: 16px; }
+html, body { margin: 0; }
 body {
   background: var(--bg); color: var(--ink); font-family: var(--body);
   font-size: 15px; line-height: 1.5;
@@ -147,7 +155,8 @@ code, .path { font-family: var(--mono); font-size: 12.5px; }
   .piece { transition: opacity 200ms; }
 }
 </style>
-
+</head>
+<body>
 <div class="wrap">
   <header>
     <div class="eyebrow">workflow-credito · arquitetura hexagonal</div>
@@ -451,8 +460,20 @@ code, .path { font-family: var(--mono); font-size: 12.5px; }
   document.getElementById('simErr').onclick = () => simulate(ERR);
   stage.addEventListener('click', e => { if (e.target === svg && stage.classList.contains('sim')) { run++; clearSim(); } });
 
+  // Quando aberta dentro de um iframe, informa a altura para a página que a incorporou.
+  // Embutida, ela esconde o próprio cabeçalho (a página que incorpora já tem título).
+  if (window.parent !== window) {
+    document.documentElement.classList.add('embedded');
+    const post = () => parent.postMessage({ type: 'embed-height', h: document.body.getBoundingClientRect().height }, '*');
+    new ResizeObserver(post).observe(document.body);
+    addEventListener('load', post);
+    post();
+  }
+
   intro();
   if (reduce) setPhase(5, { instant: true });
   else { setPhase(0, { instant: true }); setTimeout(buildByPhase, 350); }
 })();
 </script>
+</body>
+</html>
