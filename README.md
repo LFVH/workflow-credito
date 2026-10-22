@@ -1,113 +1,113 @@
-# Workflow de Crédito
+# Credit Workflow
 
-Projeto de estudo prático de uma esteira de crédito, desenvolvido para exercitar Java, Spring Boot, arquitetura hexagonal, persistência relacional, testes e mensageria em um domínio financeiro.
+A practical study project about a credit application workflow, built to explore Java, Spring Boot, hexagonal architecture, relational persistence, testing, and messaging in a financial domain.
 
-> **Estado atual:** fases 1, 2 e 3 concluídas. A aplicação já tem domínio e casos de uso, API GraphQL, persistência PostgreSQL com JPA e migrations Flyway. A fase 4 será a implementação do padrão Outbox e publicação de eventos com Kafka.
+> **Current status:** Phases 1, 2, and 3 are complete. The application includes the domain and use cases, a GraphQL API, PostgreSQL persistence with JPA, and Flyway migrations. Phase 4 will implement the Outbox pattern and publish events with Kafka.
 
-## Objetivo
+## Goal
 
-O objetivo é aprender e praticar, de forma incremental, a construção de um backend para gerenciar propostas de crédito. O projeto não é apresentado como solução pronta para uso em produção: serve como laboratório para aplicar TDD, arquitetura hexagonal, GraphQL, PostgreSQL, migrations, testes de integração e mensageria.
+The goal is to learn and practice, incrementally, how to build a backend for managing credit applications. This project is not presented as a production-ready solution; it is a learning environment for applying TDD, hexagonal architecture, GraphQL, PostgreSQL, database migrations, integration testing, and messaging.
 
-## Estado do projeto
+## Project status
 
-### Fase 1: domínio puro com TDD
+### Phase 1: pure domain with TDD
 
-- `Proposta` valida valor e prazo e mantém seu estado atual.
-- `StatusProposta` centraliza a tabela de transições permitidas.
-- Tentativas de transição inválidas lançam `TransicaoInvalidaException`.
-- Reprovação exige um motivo.
-- Mudanças de estado são registradas como `MudancaDeStatus` na instância da proposta.
-- Testes cobrem validações, transições permitidas e inválidas e estados finais.
+- `Proposta` validates the amount and term and maintains its current state.
+- `StatusProposta` centralizes the allowed state transitions.
+- Invalid transitions throw `TransicaoInvalidaException`.
+- Rejection requires a reason.
+- State changes are recorded as `MudancaDeStatus` in the proposal instance.
+- Tests cover validations, allowed and invalid transitions, and final states.
 
-### Fase 2: aplicação e API GraphQL
+### Phase 2: application and GraphQL API
 
-- `PropostaService` implementa criação, consulta, listagem e transições.
-- `PropostaRepository` define a porta de saída para persistência.
-- A API GraphQL expõe consultas e mutações para propostas; GraphiQL está habilitado.
-- Tratamento GraphQL converte regras inválidas em `BAD_REQUEST` e propostas inexistentes em `NOT_FOUND`.
+- `PropostaService` implements creation, retrieval, listing, and state transitions.
+- `PropostaRepository` defines the outbound persistence port.
+- The GraphQL API exposes queries and mutations for proposals; GraphiQL is enabled.
+- GraphQL error handling maps invalid business rules to `BAD_REQUEST` and missing proposals to `NOT_FOUND`.
 
-### Fase 3: PostgreSQL e persistência
+### Phase 3: PostgreSQL and persistence
 
-- Adaptador JPA implementa a porta `PropostaRepository` e persiste propostas no PostgreSQL.
-- Flyway aplica migrations SQL com constraints e índices do banco.
-- GraphQL trabalha com a persistência PostgreSQL, em vez do armazenamento em memória.
-- Testes de integração verificam a persistência usando PostgreSQL via Testcontainers; eles são ignorados quando Docker não está disponível.
+- The JPA adapter implements `PropostaRepository` and persists proposals in PostgreSQL.
+- Flyway applies SQL migrations with database constraints and indexes.
+- GraphQL uses PostgreSQL persistence instead of in-memory storage.
+- Integration tests verify persistence using PostgreSQL through Testcontainers; they are skipped when Docker is unavailable.
 
-### Fase 4: Outbox e Kafka
+### Phase 4: Outbox and Kafka
 
-- Persistir os eventos de domínio na mesma transação da proposta usando o padrão Outbox.
-- Publicar os eventos da Outbox em um tópico Kafka por meio de um relay.
-- Validar o fluxo entre transação, persistência do evento e publicação.
+- Persist domain events in the same transaction as the proposal using the Outbox pattern.
+- Publish Outbox events to a Kafka topic through a relay.
+- Validate the flow between the transaction, event persistence, and publication.
 
-O modelo de `Contrato` e outras extensões do domínio podem ser explorados em etapas posteriores.
+The `Contrato` model and other domain extensions may be explored in later stages.
 
-## Máquina de estados
+## State machine
 
-| Estado atual | Próximos estados permitidos |
+| Current state | Allowed next states |
 | --- | --- |
 | `RASCUNHO` | `EM_ANALISE`, `CANCELADA` |
 | `EM_ANALISE` | `PENDENTE_DOCUMENTOS`, `APROVADA`, `REPROVADA`, `CANCELADA` |
 | `PENDENTE_DOCUMENTOS` | `EM_ANALISE`, `CANCELADA` |
-| `APROVADA` | Nenhum (final) |
-| `REPROVADA` | Nenhum (final) |
-| `CANCELADA` | Nenhum (final) |
+| `APROVADA` | None (final) |
+| `REPROVADA` | None (final) |
+| `CANCELADA` | None (final) |
 
-## Arquitetura e estrutura
+## Architecture and structure
 
-O núcleo de domínio não depende do Spring. A aplicação depende da porta `PropostaRepository`; os adaptadores implementam a entrada GraphQL e a saída JPA/PostgreSQL. O Flyway gerencia a evolução do schema. A Outbox e o relay Kafka são o próximo passo do projeto.
+The domain core does not depend on Spring. The application depends on the `PropostaRepository` port; the adapters implement the GraphQL inbound adapter and the JPA/PostgreSQL outbound adapter. Flyway manages schema evolution. The Outbox and Kafka relay are the next steps for the project.
 
 ```text
 src/main/java/br/com/luiz/workflow/
 |-- domain/
-|   |-- Proposta.java                    # Entidade e regras do agregado
-|   |-- StatusProposta.java              # Estados e transições permitidas
-|   |-- MudancaDeStatus.java             # Registro de mudança de estado
+|   |-- Proposta.java                    # Aggregate entity and business rules
+|   |-- StatusProposta.java              # States and allowed transitions
+|   |-- MudancaDeStatus.java             # State change record
 |   `-- TransicaoInvalidaException.java
 |-- application/
-|   |-- PropostaService.java             # Casos de uso
+|   |-- PropostaService.java             # Use cases
 |   |-- PropostaNaoEncontradaException.java
-|   `-- port/out/PropostaRepository.java  # Porta de persistência
+|   `-- port/out/PropostaRepository.java  # Persistence port
 |-- adapters/
-|   |-- in/graphql/                      # API GraphQL e payloads
-|   `-- out/persistence/                 # Adaptador JPA e entidades
-|-- config/BeansConfig.java              # Montagem das dependências
+|   |-- in/graphql/                      # GraphQL API and payloads
+|   `-- out/persistence/                 # JPA adapter and entities
+|-- config/BeansConfig.java              # Dependency wiring
 `-- WorkflowApplication.java
 
 src/main/resources/
-|-- graphql/schema.graphqls              # Contrato da API
-|-- db/migration/                        # Migrations Flyway
-`-- application.properties               # GraphiQL e conexão PostgreSQL
+|-- graphql/schema.graphqls              # API contract
+|-- db/migration/                        # Flyway migrations
+`-- application.properties               # GraphiQL and PostgreSQL connection
 
 src/test/java/br/com/luiz/workflow/
-|-- domain/                              # Testes de regras e transições
-|-- application/                         # Testes dos casos de uso
-`-- adapters/out/persistence/            # Testes de integração JPA/PostgreSQL
+|-- domain/                              # Business rule and transition tests
+|-- application/                         # Use case tests
+`-- adapters/out/persistence/            # JPA/PostgreSQL integration tests
 ```
 
-## Requisitos
+## Requirements
 
 - Java 21
-- Maven 3.6.3 ou superior
-- PostgreSQL para executar a aplicação (configurado em `localhost:5433`, banco `workflow_db`)
+- Maven 3.6.3 or later
+- PostgreSQL to run the application (configured at `localhost:5433`, database `workflow_db`)
 
-As credenciais podem ser configuradas pelas variáveis `DB_USER` e `DB_PASSWORD`; os valores padrão são `postgres` para ambas. As migrations do Flyway são aplicadas ao iniciar a aplicação.
+Credentials can be configured through the `DB_USER` and `DB_PASSWORD` environment variables; both default to `postgres`. Flyway migrations are applied when the application starts.
 
-## Executar
+## Run
 
-Na raiz do projeto:
+From the project root:
 
 ```bash
 mvn spring-boot:run
 ```
 
-Com a aplicação iniciada, acesse:
+Once the application is running, open:
 
 - GraphiQL: `http://localhost:8080/graphiql`
-- Endpoint GraphQL: `http://localhost:8080/graphql`
+- GraphQL endpoint: `http://localhost:8080/graphql`
 
-## Operações GraphQL
+## GraphQL operations
 
-Criar uma proposta:
+Create a proposal:
 
 ```graphql
 mutation {
@@ -121,7 +121,7 @@ mutation {
 }
 ```
 
-Consultar propostas:
+List proposals:
 
 ```graphql
 query {
@@ -135,7 +135,7 @@ query {
 }
 ```
 
-Enviar uma proposta para análise (substitua o UUID):
+Submit a proposal for review (replace the UUID):
 
 ```graphql
 mutation {
@@ -146,20 +146,20 @@ mutation {
 }
 ```
 
-As outras mutações disponíveis são `pedirDocumentos`, `aprovarProposta`, `reprovarProposta` (recebe também `motivo`) e `cancelarProposta`. As transições seguem a tabela do domínio, então chamadas incompatíveis com o estado atual retornam erro de regra de negócio.
+Other available mutations are `pedirDocumentos`, `aprovarProposta`, `reprovarProposta` (which also takes `motivo`), and `cancelarProposta`. Transitions follow the domain state machine, so requests that are invalid for the current state return a business rule error.
 
-## Testes
+## Tests
 
-Executar a suíte:
+Run the test suite:
 
 ```bash
 mvn test
 ```
 
-Os testes de integração da persistência usam Testcontainers. Em ambientes sem Docker, essa classe é ignorada pela configuração do teste; os testes de domínio e aplicação continuam disponíveis.
+Persistence integration tests use Testcontainers. In environments without Docker, this test class is skipped by its configuration; domain and application tests remain available.
 
-## Próximos passos
+## Next steps
 
-1. Implementar a Outbox para gravar eventos na mesma transação que altera a proposta.
-2. Criar o relay que publica os eventos persistidos em Kafka.
-3. Testar o fluxo e documentar as decisões e garantias do padrão Outbox.
+1. Implement the Outbox to store events in the same transaction that updates a proposal.
+2. Create the relay that publishes persisted events to Kafka.
+3. Test the flow and document the Outbox pattern's design decisions and guarantees.
