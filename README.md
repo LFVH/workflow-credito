@@ -15,7 +15,7 @@ The goal is to learn and practice, incrementally, how to build a backend for man
 - `Proposta` validates the amount and term and maintains its current state.
 - `StatusProposta` centralizes the allowed state transitions.
 - Invalid transitions throw `TransicaoInvalidaException`.
-- Rejection requires a reason.
+- Rejection and cancellation require a reason.
 - State changes are recorded as `MudancaDeStatus` in the proposal instance.
 - Tests cover validations, allowed and invalid transitions, and final states.
 
@@ -129,7 +129,7 @@ query {
     id
     valor
     status
-    motivoReprovacao
+    motivo
     transicoesPossiveis
   }
 }
@@ -146,7 +146,19 @@ mutation {
 }
 ```
 
-Other available mutations are `pedirDocumentos`, `aprovarProposta`, `reprovarProposta` (which also takes `motivo`), and `cancelarProposta`. Transitions follow the domain state machine, so requests that are invalid for the current state return a business rule error.
+Cancel a proposal (a reason is required):
+
+```graphql
+mutation {
+  cancelarProposta(id: "00000000-0000-0000-0000-000000000000", motivo: "Customer withdrew the request") {
+    id
+    status
+    motivo
+  }
+}
+```
+
+Other available mutations are `pedirDocumentos`, `aprovarProposta`, and `reprovarProposta`, which also requires `motivo`. Transitions follow the domain state machine, so requests that are invalid for the current state return a business rule error.
 
 ## Tests
 
