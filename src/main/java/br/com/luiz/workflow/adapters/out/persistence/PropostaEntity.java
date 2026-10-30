@@ -43,6 +43,6 @@ class PropostaEntity {
     }
 
     Proposta paraDominio() {
-        return Proposta.reconstituir(id, valor, prazoMeses, status, motivo);
+        return Proposta.reconstituir(id, valor, prazoMeses, status, motivo, null);
     }
 }
