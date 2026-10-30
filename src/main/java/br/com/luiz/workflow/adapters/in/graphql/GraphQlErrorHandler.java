@@ -1,5 +1,6 @@
 package br.com.luiz.workflow.adapters.in.graphql;
 
+import br.com.luiz.workflow.application.PropostaDesatualizadaException;
 import br.com.luiz.workflow.application.PropostaNaoEncontradaException;
 import br.com.luiz.workflow.domain.TransicaoInvalidaException;
 import graphql.GraphQLError;
@@ -18,5 +19,11 @@ public class GraphQlErrorHandler {
     @GraphQlExceptionHandler
     public GraphQLError naoEncontrada(PropostaNaoEncontradaException ex) {
         return GraphQLError.newError().errorType(ErrorType.NOT_FOUND).message(ex.getMessage()).build();
+    }
+
+    /** Lock otimista: outra operação gravou antes. O cliente deve reler a proposta e decidir de novo. */
+    @GraphQlExceptionHandler
+    public GraphQLError desatualizada(PropostaDesatualizadaException ex) {
+        return GraphQLError.newError().errorType(ClassificacaoDeErro.CONFLITO).message(ex.getMessage()).build();
     }
 }
