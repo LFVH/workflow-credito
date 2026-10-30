@@ -138,13 +138,28 @@ class PropostaTest {
     }
 
     @Test
+    void novaPropostaAindaNaoTemVersao() {
+        assertThat(propostaNova().versao()).isNull();
+    }
+    @Test
+    void transicaoNaoMexeNaVersao() {
+        Proposta p = Proposta.reconstituir(UUID.randomUUID(), new BigDecimal("1000"), 12,
+            StatusProposta.RASCUNHO, null, 7L);
+
+        p.enviarParaAnalise();
+        assertThat(p.versao()).isEqualTo(7L);
+    }
+
+    @Test
     void reconstituirRestauraEstadoSemGerarEventos() {
         UUID id = UUID.randomUUID();
-        Proposta p = Proposta.reconstituir(id, new BigDecimal("1000"), 12, StatusProposta.REPROVADA, "score baixo");
+        Proposta p = Proposta.reconstituir(id, new BigDecimal("1000"), 12,
+            StatusProposta.REPROVADA, "score baixo", 3L);
 
         assertThat(p.id()).isEqualTo(id);
         assertThat(p.status()).isEqualTo(StatusProposta.REPROVADA);
         assertThat(p.motivo()).isEqualTo("score baixo");
+        assertThat(p.versao()).isEqualTo(3L);
         assertThat(p.eventos()).isEmpty();
     }
 }
