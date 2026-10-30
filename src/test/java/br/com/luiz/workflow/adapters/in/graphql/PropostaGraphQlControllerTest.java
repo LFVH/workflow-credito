@@ -10,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import br.com.luiz.workflow.application.PropostaDesatualizadaException;
 import br.com.luiz.workflow.application.PropostaNaoEncontradaException;
 import br.com.luiz.workflow.application.PropostaService;
 import br.com.luiz.workflow.domain.Proposta;
@@ -336,6 +337,24 @@ class PropostaGraphQlControllerTest {
             .execute()
             .errors()
             .satisfy(erroUnico(ErrorType.NOT_FOUND, id.toString()));
+    }
+
+    @Test
+    void propostaDesatualizadaViraConflito() {
+        UUID id = UUID.randomUUID();
+        when(service.aprovar(any())).thenThrow(new PropostaDesatualizadaException(id));
+
+        graphQlTester.document("""
+                mutation Aprovar($id: ID!) {
+                  aprovarProposta(id: $id) { id }
+                }
+                """)
+            .variable("id", id.toString())
+            .execute()
+            .errors()
+            .satisfy(erroUnico(ClassificacaoDeErro.CONFLITO, "alterada por outra operação"));
+
+        verify(service).aprovar(id);
     }
 
     private static Consumer<List<ResponseError>> erroUnico(ErrorClassification tipo, String trechoDaMensagem) {
