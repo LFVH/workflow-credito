@@ -30,6 +30,16 @@ class PropostaEntity {
     @Column(name = "criada_em", insertable = false, updatable = false)
     private Instant criadaEm;
 
+    /**
+     * Lock otimista. Todo UPDATE vira "... versao = lida + 1 WHERE id = ? AND versao = lida";
+     * 0 linhas afetadas = outra operação gravou antes = exceção.
+     * Long (wrapper), não long: versão null = entidade nova, e o Spring Data faz persist
+     * (INSERT direto) em vez de merge (SELECT + INSERT).
+     */
+    @Version
+    @Column(nullable = false)
+    private Long versao;
+
     protected PropostaEntity() {} // exigido pelo JPA
 
     static PropostaEntity de(Proposta p) {
@@ -39,10 +49,11 @@ class PropostaEntity {
         e.prazoMeses = p.prazoMeses();
         e.status = p.status();
         e.motivo = p.motivo();
+        e.versao = p.versao();
         return e;
     }
 
     Proposta paraDominio() {
-        return Proposta.reconstituir(id, valor, prazoMeses, status, motivo, null);
+        return Proposta.reconstituir(id, valor, prazoMeses, status, motivo, versao);
     }
 }
