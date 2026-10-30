@@ -1,7 +1,9 @@
 package br.com.luiz.workflow.adapters.out.persistence;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import br.com.luiz.workflow.application.PropostaDesatualizadaException;
 import br.com.luiz.workflow.domain.Proposta;
 import br.com.luiz.workflow.domain.StatusProposta;
 import jakarta.persistence.EntityManager;
@@ -73,5 +75,69 @@ class PropostaRepositoryJpaTest {
         em.clear();
 
         assertThat(repository.listar()).hasSize(2);
+    }
+
+    // ===== lock otimista (@Version) =====
+
+    @Test
+    void propostaNovaGravaVersaoZeroECadaAlteracaoIncrementa() {
+        Proposta salva = repository.salvar(Proposta.nova(new BigDecimal("5000.00"), 12));
+        assertThat(salva.versao()).isEqualTo(0L); // persist: o Hibernate "semeia" a versão com 0
+
+        salva.enviarParaAnalise();
+        Proposta alterada = repository.salvar(salva);
+        assertThat(alterada.versao()).isEqualTo(1L); // só é 1 aqui porque o salvar faz flush
+
+        em.clear();
+        assertThat(repository.buscarPorId(salva.id()).orElseThrow().versao()).isEqualTo(1L);
+    }
+
+    @Test
+    void segundaCopiaDaMesmaVersaoEhRecusada() {
+        UUID id = repository.salvar(emAnalise()).id();
+        em.clear();
+
+        Proposta doAnalista = repository.buscarPorId(id).orElseThrow();
+        Proposta doCliente = repository.buscarPorId(id).orElseThrow();
+        assertThat(doCliente.versao()).isEqualTo(doAnalista.versao());
+
+        doAnalista.aprovar();
+        repository.salvar(doAnalista);
+
+        // Barrado já no merge: a cópia diz versão 0, a entidade gerenciada já está na 1.
+        doCliente.cancelar("Cliente desistiu");
+        assertThatThrownBy(() -> repository.salvar(doCliente))
+            .isInstanceOf(PropostaDesatualizadaException.class)
+            .hasMessageContaining(id.toString());
+        // Não consulte o banco depois da exceção: a sessão fica marcada para rollback.
+    }
+
+    @Test
+    void updateQueNaoEncontraAVersaoLidaEhRecusado() {
+        UUID id = repository.salvar(emAnalise()).id();
+        Proposta doAnalista = repository.buscarPorId(id).orElseThrow(); // versão 0
+
+        // Outra transação (outra instância da aplicação) grava antes: no banco a versão vira 1.
+        // O UPDATE nativo não atualiza a entidade que o EntityManager já tem em memória (versão 0).
+        em.createNativeQuery("""
+                UPDATE proposta
+                   SET status = 'CANCELADA', motivo = 'Cliente desistiu', versao = versao + 1
+                 WHERE id = :id
+                """)
+            .setParameter("id", id)
+            .executeUpdate();
+
+        doAnalista.aprovar();
+
+        // O merge não percebe nada (memória diz 0 e a cópia diz 0); quem barra é o
+        // UPDATE ... WHERE id = ? AND versao = 0, que afeta 0 linhas.
+        assertThatThrownBy(() -> repository.salvar(doAnalista))
+            .isInstanceOf(PropostaDesatualizadaException.class);
+    }
+
+    private static Proposta emAnalise() {
+        Proposta p = Proposta.nova(new BigDecimal("10000.00"), 24);
+        p.enviarParaAnalise();
+        return p;
     }
 }
