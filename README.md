@@ -24,7 +24,7 @@ The goal is to learn and practice, incrementally, how to build a backend for man
 - `PropostaService` implements creation, retrieval, listing, and state transitions.
 - `PropostaRepository` defines the outbound persistence port.
 - The GraphQL API exposes queries and mutations for proposals; GraphiQL is enabled.
-- GraphQL error handling maps invalid business rules to `BAD_REQUEST` and missing proposals to `NOT_FOUND`.
+- GraphQL error handling maps invalid business rules to `BAD_REQUEST`, missing proposals to `NOT_FOUND`, and concurrent modifications to a custom `CONFLITO` classification.
 
 ### Phase 3: PostgreSQL and persistence
 
@@ -32,6 +32,15 @@ The goal is to learn and practice, incrementally, how to build a backend for man
 - Flyway applies SQL migrations with database constraints and indexes.
 - GraphQL uses PostgreSQL persistence instead of in-memory storage.
 - Integration tests verify persistence using PostgreSQL through Testcontainers; they are skipped when Docker is unavailable.
+
+### Optimistic locking
+
+- Two requests can read the same proposal and both decide a valid transition, for example an analyst approving it while the customer cancels it. Without protection, the last write silently overwrites the first one (a lost update).
+- `Proposta` carries a `versao` (version) that is read with it. The JPA entity maps the `versao` column (Flyway migration `V3`) with `@Version`, so every update runs `UPDATE ... WHERE id = ? AND versao = ?` and increments the version. Zero affected rows means another operation changed the proposal first.
+- The JPA adapter uses `saveAndFlush`, so the conflict is detected inside the adapter, and translates Spring's `ObjectOptimisticLockingFailureException` into the application's `PropostaDesatualizadaException`. The domain and the use cases never see JPA exceptions, and `PropostaService` did not change.
+- GraphQL returns this error with the `CONFLITO` classification: the client should reload the proposal and decide again.
+- Because the version is a wrapper type, a new proposal has a `null` version and Spring Data persists it with a single `INSERT`, instead of the `SELECT` + `INSERT` that `merge` requires for entities with assigned identifiers.
+- The in-memory repository mirrors these rules (it stores copies and checks versions), so the race is reproduced deterministically in fast unit tests; the PostgreSQL behavior is covered by Testcontainers integration tests in CI.
 
 ### Phase 4: Outbox and Kafka
 
