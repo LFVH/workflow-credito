@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.stream.Stream;
 
 /**
  * Implementação do port em memória, para testes rápidos sem banco.
@@ -18,7 +19,9 @@ import java.util.UUID;
  *       (no banco, cada leitura monta um objeto novo a partir da linha);</li>
  *   <li>controla a versão como o {@code @Version}: proposta nova entra com 0, cada salvar
  *       incrementa, e salvar com versão diferente da guardada lança
- *       {@link PropostaDesatualizadaException}.</li>
+ *       {@link PropostaDesatualizadaException};</li>
+ *   <li>lista na ordem de inserção: o {@link LinkedHashMap} não muda a posição de uma chave
+ *       regravada, como o {@code criada_em}, que o UPDATE não altera.</li>
  * </ul>
  */
 public class PropostaRepositoryEmMemoria implements PropostaRepository {
@@ -46,8 +49,17 @@ public class PropostaRepositoryEmMemoria implements PropostaRepository {
     }
 
     @Override
-    public synchronized List<Proposta> listar() {
-        return banco.values().stream().map(p -> copia(p, p.versao())).toList();
+    public synchronized List<Proposta> listar(UUID depoisDe, int limite) {
+        Stream<Proposta> naOrdem = banco.values().stream(); // ordem de inserção
+        if (depoisDe != null) {
+            if (!banco.containsKey(depoisDe)) {
+                return List.of(); // como no SQL: subconsulta sem linha => comparação NULL => nada
+            }
+            naOrdem = naOrdem
+                .dropWhile(p -> !p.id().equals(depoisDe)) // descarta as anteriores ao cursor...
+                .skip(1);                                  // ...e o próprio cursor
+        }
+        return naOrdem.limit(limite).map(p -> copia(p, p.versao())).toList();
     }
 
     /** Snapshot: objeto novo, sem eventos, com o estado de {@code p} e a versão informada. */

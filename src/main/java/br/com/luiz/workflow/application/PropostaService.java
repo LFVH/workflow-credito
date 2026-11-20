@@ -10,6 +10,12 @@ import java.util.function.Consumer;
 
 public class PropostaService {
 
+    /** Tamanho da página quando o cliente não informa o limite. */
+    public static final int LIMITE_PADRAO = 20;
+
+    /** Maior página aceita: protege memória, banco e rede de um "me dá tudo". */
+    public static final int LIMITE_MAXIMO = 100;
+
     private final PropostaRepository repository;
 
     public PropostaService(PropostaRepository repository) {
@@ -34,8 +40,19 @@ public class PropostaService {
         return repository.buscarPorId(id);
     }
 
-    public List<Proposta> listar() {
-        return repository.listar();
+    /**
+     * Uma página de propostas na ordem de criação (paginação por cursor).
+     *
+     * @param depoisDe id da última proposta da página anterior; {@code null} = primeira página
+     * @param limite   tamanho da página; {@code null} = {@link #LIMITE_PADRAO}
+     * @throws IllegalArgumentException se o limite estiver fora de 1..{@link #LIMITE_MAXIMO}
+     */
+    public List<Proposta> listar(UUID depoisDe, Integer limite) {
+        int tamanho = (limite == null) ? LIMITE_PADRAO : limite;
+        if (tamanho < 1 || tamanho > LIMITE_MAXIMO) {
+            throw new IllegalArgumentException("Limite deve estar entre 1 e " + LIMITE_MAXIMO);
+        }
+        return repository.listar(depoisDe, tamanho);
     }
 
     private Proposta transicionar(UUID id, Consumer<Proposta> acao) {

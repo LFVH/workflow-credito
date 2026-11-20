@@ -89,7 +89,7 @@ class PropostaGraphQlControllerTest {
     void propostasDevolveAListaNaOrdemQueOServiceEntregou() {
         Proposta primeira = rascunho();
         Proposta segunda = aprovada();
-        when(service.listar()).thenReturn(List.of(primeira, segunda));
+        when(service.listar(any(), any())).thenReturn(List.of(primeira, segunda));
 
         graphQlTester.document("""
                 query { propostas { id status } }
@@ -100,7 +100,8 @@ class PropostaGraphQlControllerTest {
             .path("propostas[*].status").entityList(String.class)
                 .containsExactly("RASCUNHO", "APROVADA");
 
-        verify(service).listar();
+        // Sem argumentos, o controller repassa null e null: quem decide o padrão (20) é o service.
+        verify(service).listar(null, null);
     }
 
     @Test

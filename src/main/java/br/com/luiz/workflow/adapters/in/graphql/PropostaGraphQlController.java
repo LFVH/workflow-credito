@@ -25,7 +25,8 @@ public class PropostaGraphQlController {
 
     @QueryMapping
     public List<PropostaPayload> propostas() {
-        return service.listar().stream().map(PropostaPayload::de).toList();
+        // Os argumentos depoisDe e limite chegam no passo 14.
+        return service.listar(null, null).stream().map(PropostaPayload::de).toList();
     }
 
     @MutationMapping

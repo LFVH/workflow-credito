@@ -15,6 +15,17 @@ public interface PropostaRepository {
      * Quem chama deve continuar com o objeto devolvido, não com o que passou.
      */
     Proposta salvar(Proposta proposta);
+
     Optional<Proposta> buscarPorId(UUID id);
-    List<Proposta> listar();
+
+    /**
+     * Uma página de propostas, em ordem estável de criação (no banco: {@code criada_em}
+     * e, no empate, {@code id}). Alterar uma proposta não muda a posição dela.
+     *
+     * @param depoisDe id da última proposta da página anterior (o cursor);
+     *                 {@code null} = primeira página; cursor que não existe = lista vazia
+     * @param limite   quantidade máxima de propostas, já validada pelo caso de uso
+     * @return as propostas criadas depois do cursor (sem ele), no máximo {@code limite}
+     */
+    List<Proposta> listar(UUID depoisDe, int limite);
 }

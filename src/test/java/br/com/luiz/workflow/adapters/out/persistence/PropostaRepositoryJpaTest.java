@@ -74,7 +74,7 @@ class PropostaRepositoryJpaTest {
         em.flush();
         em.clear();
 
-        assertThat(repository.listar()).hasSize(2);
+        assertThat(repository.listar(null, 10)).hasSize(2); // provisório: reescrito no passo 8
     }
 
     // ===== lock otimista (@Version) =====

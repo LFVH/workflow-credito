@@ -40,7 +40,8 @@ class PropostaRepositoryJpa implements PropostaRepository {
     }
 
     @Override
-    public List<Proposta> listar() {
-        return jpa.findAllByOrderByCriadaEmAsc().stream().map(PropostaEntity::paraDominio).toList();
+    public List<Proposta> listar(UUID depoisDe, int limite) {
+        // PROVISÓRIO (item 05, passo 6): o keyset com SQL nativo chega no passo 11, depois do teste.
+        throw new UnsupportedOperationException("Paginação ainda não implementada no adaptador JPA");
     }
 }
