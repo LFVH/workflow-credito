@@ -73,6 +73,15 @@ class PropostaRepositoryEmMemoriaTest {
             .isInstanceOf(PropostaDesatualizadaException.class);
     }
 
+    @Test
+    void listarDevolveCopias() {
+        UUID id = repository.salvar(Proposta.nova(new BigDecimal("5000"), 12)).id();
+
+        repository.listar(null, 10).get(0).enviarParaAnalise(); // alterou o item listado e NÃO salvou
+
+        assertThat(repository.buscarPorId(id).orElseThrow().status()).isEqualTo(StatusProposta.RASCUNHO);
+    }
+
     /** Cria, envia para análise e devolve o id. Sempre continua com o objeto devolvido. */
     private UUID emAnalise() {
         Proposta salva = repository.salvar(Proposta.nova(new BigDecimal("5000"), 12));

@@ -8,9 +8,13 @@ import br.com.luiz.workflow.domain.Proposta;
 import br.com.luiz.workflow.domain.StatusProposta;
 import br.com.luiz.workflow.domain.TransicaoInvalidaException;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class PropostaServiceTest {
 
@@ -59,14 +63,6 @@ class PropostaServiceTest {
             .isInstanceOf(PropostaNaoEncontradaException.class);
     }
 
-    @Test
-    void listaTodasAsPropostas() {
-        service.criar(new BigDecimal("1000"), 6);
-        service.criar(new BigDecimal("2000"), 12);
-
-        assertThat(service.listar()).hasSize(2);
-    }
-
     // ===== lock otimista =====
 
     @Test
@@ -99,6 +95,100 @@ class PropostaServiceTest {
         assertThat(gravada.status()).isEqualTo(StatusProposta.CANCELADA);
         assertThat(gravada.motivo()).isEqualTo("Cliente desistiu");
         assertThat(gravada.versao()).isEqualTo(2L);
+    }
+
+    // ===== paginação keyset =====
+
+    @Test
+    void listaNaOrdemDeCriacaoRespeitandoOLimite() {
+        List<UUID> criadas = criarVarias(3);
+
+        assertThat(ids(service.listar(null, 2))).containsExactly(criadas.get(0), criadas.get(1));
+    }
+
+    @Test
+    void semLimiteUsaOLimitePadrao() {
+        List<UUID> criadas = criarVarias(PropostaService.LIMITE_PADRAO + 5);
+
+        assertThat(ids(service.listar(null, null)))
+            .containsExactlyElementsOf(criadas.subList(0, PropostaService.LIMITE_PADRAO));
+    }
+
+    @Test
+    void limiteMaximoEhAceito() {
+        criarVarias(PropostaService.LIMITE_MAXIMO + 1);
+
+        assertThat(service.listar(null, PropostaService.LIMITE_MAXIMO))
+            .hasSize(PropostaService.LIMITE_MAXIMO);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, -1, 101})
+    void limiteForaDoIntervaloEhRecusado(int limite) {
+        assertThatThrownBy(() -> service.listar(null, limite))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessage("Limite deve estar entre 1 e 100");
+    }
+
+    @Test
+    void cursorDevolveAsPropostasCriadasDepoisDele() {
+        List<UUID> criadas = criarVarias(5);
+
+        // O cursor é a 2ª; a página começa na 3ª (o próprio cursor não volta).
+        assertThat(ids(service.listar(criadas.get(1), 2)))
+            .containsExactly(criadas.get(2), criadas.get(3));
+    }
+
+    @Test
+    void percorrerTodasAsPaginasNaoRepeteNemPulaProposta() {
+        List<UUID> criadas = criarVarias(7);
+        List<UUID> vistas = new ArrayList<>();
+        List<Integer> tamanhos = new ArrayList<>();
+
+        UUID cursor = null;
+        for (int volta = 0; volta < 10; volta++) { // teto: um cursor ignorado faria o loop girar para sempre
+            List<Proposta> pagina = service.listar(cursor, 3);
+            if (pagina.isEmpty()) {
+                break;
+            }
+            tamanhos.add(pagina.size());
+            vistas.addAll(ids(pagina));
+            cursor = pagina.getLast().id(); // o cursor é o id da ÚLTIMA da página
+        }
+
+        assertThat(tamanhos).containsExactly(3, 3, 1);
+        assertThat(vistas).containsExactlyElementsOf(criadas);
+    }
+
+    @Test
+    void cursorDesconhecidoDevolveListaVazia() {
+        criarVarias(3);
+
+        assertThat(service.listar(UUID.randomUUID(), 10)).isEmpty();
+    }
+
+    @Test
+    void mudarDeStatusNaoMudaAPosicaoNaLista() {
+        List<UUID> criadas = criarVarias(3);
+        service.enviarParaAnalise(criadas.get(0)); // a primeira é gravada de novo
+
+        // No banco, criada_em não muda no UPDATE: a primeira continua primeira.
+        assertThat(ids(service.listar(null, 10))).containsExactlyElementsOf(criadas);
+    }
+
+    // ===== apoio =====
+
+    /** Cria propostas em sequência e devolve os ids na ordem de criação. */
+    private List<UUID> criarVarias(int quantidade) {
+        List<UUID> ids = new ArrayList<>();
+        for (int i = 0; i < quantidade; i++) {
+            ids.add(service.criar(new BigDecimal("1000"), 12).id());
+        }
+        return ids;
+    }
+
+    private static List<UUID> ids(List<Proposta> propostas) {
+        return propostas.stream().map(Proposta::id).toList();
     }
 
     /**
