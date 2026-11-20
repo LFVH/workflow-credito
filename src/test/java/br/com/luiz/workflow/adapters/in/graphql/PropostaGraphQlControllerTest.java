@@ -105,6 +105,42 @@ class PropostaGraphQlControllerTest {
     }
 
     @Test
+    void propostasRepassaCursorELimiteAoService() {
+        UUID cursor = UUID.randomUUID();
+        when(service.listar(any(), any())).thenReturn(List.of());
+
+        graphQlTester.document("""
+                query Pagina($depoisDe: ID, $limite: Int) {
+                  propostas(depoisDe: $depoisDe, limite: $limite) { id }
+                }
+                """)
+            .variable("depoisDe", cursor.toString())
+            .variable("limite", 5)
+            .execute()
+            .path("propostas").entityList(Object.class).hasSize(0);
+
+        // O controller só repassa: não aplica padrão, não valida.
+        verify(service).listar(cursor, 5);
+        verifyNoMoreInteractions(service);
+    }
+
+    @Test
+    void limiteForaDoIntervaloViraBadRequest() {
+        // Quem decide que 500 é inválido é o service (PropostaServiceTest); o mock só imita a recusa.
+        when(service.listar(any(), any()))
+            .thenThrow(new IllegalArgumentException("Limite deve estar entre 1 e 100"));
+
+        graphQlTester.document("""
+                query { propostas(limite: 500) { id } }
+                """)
+            .execute()
+            .errors()
+            .satisfy(erroUnico(ErrorType.BAD_REQUEST, "Limite deve estar entre 1 e 100"));
+
+        verify(service).listar(null, 500);
+    }
+
+    @Test
     void criarPropostaComValorEmVariavelDeTexto() {
         when(service.criar(any(), anyInt())).thenReturn(rascunho());
 
