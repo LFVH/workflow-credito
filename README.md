@@ -42,6 +42,14 @@ The goal is to learn and practice, incrementally, how to build a backend for man
 - Because the version is a wrapper type, a new proposal has a `null` version and Spring Data persists it with a single `INSERT`, instead of the `SELECT` + `INSERT` that `merge` requires for entities with assigned identifiers.
 - The in-memory repository mirrors these rules (it stores copies and checks versions), so the race is reproduced deterministically in fast unit tests; the PostgreSQL behavior is covered by Testcontainers integration tests in CI.
 
+### Keyset pagination
+
+- `propostas(depoisDe: ID, limite: Int)` returns one page of proposals in creation order. `depoisDe` is the id of the last proposal of the previous page (the cursor); `limite` defaults to 20 and must be between 1 and 100. Both arguments are optional, so existing clients keep working, but they now receive the first 20 proposals instead of the whole table.
+- Pages use keyset (seek) pagination instead of `OFFSET`: `WHERE (criada_em, id) > (SELECT criada_em, id FROM proposta WHERE id = :depoisDe) ORDER BY criada_em, id LIMIT :limite`, backed by the `(criada_em, id)` index from Flyway migration `V4`. `OFFSET` makes PostgreSQL read and discard every row before the requested page; keyset seeks the cursor in the index, so a deep page costs the same as the first one, and rows inserted between requests do not shift the pages.
+- The `id` breaks ties: `criada_em` defaults to `now()`, which is the start time of the transaction, so every proposal inserted in the same transaction gets the same timestamp. A cursor based on the timestamp alone would skip or repeat proposals.
+- The JPA adapter uses two native queries (first page and next page) instead of one query with `:depoisDe IS NULL`, because the PostgreSQL driver cannot infer the type of a null parameter. An unknown cursor returns an empty page.
+- Use case tests run against the in-memory repository, which keeps insertion order like the immutable `criada_em`, and cover the default and maximum limits, the cursor, and unknown cursors. Testcontainers tests cover the SQL, including the timestamp tie, in CI.
+
 ### Phase 4: Outbox and Kafka
 
 - Persist domain events in the same transaction as the proposal using the Outbox pattern.
@@ -130,11 +138,11 @@ mutation {
 }
 ```
 
-List proposals:
+List proposals (one page at a time, in creation order):
 
 ```graphql
 query {
-  propostas {
+  propostas(limite: 20) {
     id
     valor
     status
@@ -143,6 +151,8 @@ query {
   }
 }
 ```
+
+To fetch the next page, pass the `id` of the last proposal you received as `depoisDe`, for example `propostas(depoisDe: "00000000-0000-0000-0000-000000000000", limite: 20)`. Both arguments are optional: `limite` defaults to 20 and must be between 1 and 100. An empty list means there are no more proposals.
 
 Submit a proposal for review (replace the UUID):
 
