@@ -39,9 +39,17 @@ class PropostaRepositoryJpa implements PropostaRepository {
         return jpa.findById(id).map(PropostaEntity::paraDominio);
     }
 
+    /**
+     * Duas queries em vez de uma com "(:depoisDe IS NULL OR ...)": com o parâmetro nulo,
+     * o driver manda um valor sem tipo e o Postgres não consegue resolvê-lo; e o OR
+     * atrapalharia o planejador. Cada query aqui tem um plano simples pelo índice
+     * (criada_em, id) da V4.
+     */
     @Override
     public List<Proposta> listar(UUID depoisDe, int limite) {
-        // PROVISÓRIO (item 05, passo 6): o keyset com SQL nativo chega no passo 11, depois do teste.
-        throw new UnsupportedOperationException("Paginação ainda não implementada no adaptador JPA");
+        List<PropostaEntity> pagina = (depoisDe == null)
+            ? jpa.primeiraPagina(limite)
+            : jpa.paginaApos(depoisDe, limite);
+        return pagina.stream().map(PropostaEntity::paraDominio).toList();
     }
 }
