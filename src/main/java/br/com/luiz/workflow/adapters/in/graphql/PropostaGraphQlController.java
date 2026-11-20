@@ -23,10 +23,13 @@ public class PropostaGraphQlController {
         return service.buscar(id).map(PropostaPayload::de).orElse(null);
     }
 
+    /**
+     * Argumentos omitidos chegam como null. O padrão (20) e o máximo (100) são regras do
+     * caso de uso: o controller só repassa, para valerem igual em qualquer adaptador.
+     */
     @QueryMapping
-    public List<PropostaPayload> propostas() {
-        // Os argumentos depoisDe e limite chegam no passo 14.
-        return service.listar(null, null).stream().map(PropostaPayload::de).toList();
+    public List<PropostaPayload> propostas(@Argument UUID depoisDe, @Argument Integer limite) {
+        return service.listar(depoisDe, limite).stream().map(PropostaPayload::de).toList();
     }
 
     @MutationMapping

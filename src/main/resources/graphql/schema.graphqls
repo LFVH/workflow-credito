@@ -20,7 +20,18 @@ type Proposta {
 
 type Query {
     proposta(id: ID!): Proposta
-    propostas: [Proposta!]!
+
+    """
+    Propostas em ordem de criação, uma página por vez (paginação por cursor).
+    Para a próxima página, passe em depoisDe o id da última proposta recebida.
+    Página vazia: fim da lista.
+    """
+    propostas(
+        "Id da última proposta da página anterior. Omitido: primeira página."
+        depoisDe: ID
+        "Tamanho da página, de 1 a 100. Omitido: 20."
+        limite: Int
+    ): [Proposta!]!
 }
 
 type Mutation {
