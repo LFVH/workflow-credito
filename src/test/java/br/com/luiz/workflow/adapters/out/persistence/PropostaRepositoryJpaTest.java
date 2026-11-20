@@ -8,6 +8,7 @@ import br.com.luiz.workflow.domain.Proposta;
 import br.com.luiz.workflow.domain.StatusProposta;
 import jakarta.persistence.EntityManager;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -65,16 +66,6 @@ class PropostaRepositoryJpaTest {
     @Test
     void idInexistenteRetornaVazio() {
         assertThat(repository.buscarPorId(UUID.randomUUID())).isEmpty();
-    }
-
-    @Test
-    void listaNaOrdemDeCriacao() {
-        repository.salvar(Proposta.nova(new BigDecimal("1000"), 6));
-        repository.salvar(Proposta.nova(new BigDecimal("2000"), 12));
-        em.flush();
-        em.clear();
-
-        assertThat(repository.listar(null, 10)).hasSize(2); // provisório: reescrito no passo 8
     }
 
     // ===== lock otimista (@Version) =====
@@ -135,9 +126,87 @@ class PropostaRepositoryJpaTest {
             .isInstanceOf(PropostaDesatualizadaException.class);
     }
 
+    // ===== paginação keyset =====
+    // O @DataJpaTest roda cada teste numa transação só: todo INSERT daqui recebe o MESMO
+    // criada_em (DEFAULT now() = início da transação). O empate acontece de graça.
+
+    @Test
+    void primeiraPaginaOrdenaPorCriadaEmEDepoisPorId() {
+        salvarNova(id(1));
+        salvarNova(id(2));
+        salvarNova(id(3));
+        criadaUmaHoraDepois(id(1)); // a de menor id passa a ser a mais recente
+        em.clear();
+
+        // criada_em decide primeiro; no empate (2 e 3), decide o id.
+        assertThat(ids(repository.listar(null, 10))).containsExactly(id(2), id(3), id(1));
+        assertThat(ids(repository.listar(null, 2))).containsExactly(id(2), id(3));
+    }
+
+    @Test
+    void empateNoCriadaEmEhDesempatadoPeloIdSemPularNemRepetir() {
+        for (int n : List.of(5, 3, 1, 4, 2)) { // fora de ordem de propósito
+            salvarNova(id(n));
+        }
+        em.clear();
+
+        Object datasDistintas = em.createNativeQuery("SELECT count(DISTINCT criada_em) FROM proposta")
+            .getSingleResult();
+        assertThat(((Number) datasDistintas).intValue())
+            .as("as cinco nasceram na mesma transação, logo com o mesmo now()")
+            .isEqualTo(1);
+
+        List<Proposta> pagina1 = repository.listar(null, 2);
+        List<Proposta> pagina2 = repository.listar(pagina1.getLast().id(), 2);
+        List<Proposta> pagina3 = repository.listar(pagina2.getLast().id(), 2);
+        List<Proposta> pagina4 = repository.listar(pagina3.getLast().id(), 2);
+
+        assertThat(ids(pagina1)).containsExactly(id(1), id(2));
+        assertThat(ids(pagina2)).containsExactly(id(3), id(4));
+        assertThat(ids(pagina3)).containsExactly(id(5));
+        assertThat(pagina4).isEmpty();
+    }
+
+    @Test
+    void cursorDesconhecidoDevolveListaVazia() {
+        salvarNova(id(1));
+        salvarNova(id(2));
+        em.clear();
+
+        // A subconsulta pelo cursor não acha linha => a comparação vira NULL => nenhuma linha.
+        assertThat(repository.listar(UUID.randomUUID(), 10)).isEmpty();
+    }
+
+    // ===== apoio =====
+
     private static Proposta emAnalise() {
         Proposta p = Proposta.nova(new BigDecimal("10000.00"), 24);
         p.enviarParaAnalise();
         return p;
+    }
+
+    /**
+     * Grava uma proposta nova com o id escolhido, para a ordem do desempate ser previsível.
+     * Versão null = nova: o Spring Data faz persist (INSERT), e o banco preenche criada_em.
+     */
+    private void salvarNova(UUID id) {
+        repository.salvar(Proposta.reconstituir(id, new BigDecimal("1000.00"), 12,
+            StatusProposta.RASCUNHO, null, null));
+    }
+
+    /** Simula uma proposta criada depois: empurra o criada_em uma hora para frente. */
+    private void criadaUmaHoraDepois(UUID id) {
+        em.createNativeQuery("UPDATE proposta SET criada_em = criada_em + interval '1 hour' WHERE id = :id")
+            .setParameter("id", id)
+            .executeUpdate();
+    }
+
+    /** id(1) = 00000000-0000-0000-0000-000000000001, e assim por diante. */
+    private static UUID id(int n) {
+        return UUID.fromString("00000000-0000-0000-0000-%012d".formatted(n));
+    }
+
+    private static List<UUID> ids(List<Proposta> propostas) {
+        return propostas.stream().map(Proposta::id).toList();
     }
 }
