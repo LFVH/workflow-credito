@@ -192,4 +192,148 @@ class PropostaRestControllerTest {
             .andExpect(jsonPath("$.type").value(TIPO + "dados-invalidos"))
             .andExpect(jsonPath("$.detail").value("Limite deve estar entre 1 e 100"));
     }
+
+    // ---------- transições ----------
+
+    @Test
+    void envioParaAnaliseChamaOCasoDeUso() throws Exception {
+        when(service.enviarParaAnalise(ID)).thenReturn(proposta(ID, StatusProposta.EM_ANALISE, null, 1L));
+
+        mvc.perform(post("/api/propostas/{id}/envio-para-analise", ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("EM_ANALISE"))
+            .andExpect(jsonPath("$.versao").value(1));
+
+        verify(service).enviarParaAnalise(ID);
+    }
+
+    @Test
+    void pedidoDeDocumentosChamaOCasoDeUso() throws Exception {
+        when(service.pedirDocumentos(ID)).thenReturn(proposta(ID, StatusProposta.PENDENTE_DOCUMENTOS, null, 2L));
+
+        mvc.perform(post("/api/propostas/{id}/pedido-de-documentos", ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("PENDENTE_DOCUMENTOS"))
+            .andExpect(jsonPath("$.transicoesPossiveis", contains("EM_ANALISE", "CANCELADA")));
+
+        verify(service).pedirDocumentos(ID);
+    }
+
+    @Test
+    void aprovacaoChamaOCasoDeUso() throws Exception {
+        when(service.aprovar(ID)).thenReturn(proposta(ID, StatusProposta.APROVADA, null, 2L));
+
+        mvc.perform(post("/api/propostas/{id}/aprovacao", ID))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("APROVADA"))
+            .andExpect(jsonPath("$.transicoesPossiveis", hasSize(0)));
+
+        verify(service).aprovar(ID);
+    }
+
+    @Test
+    void reprovacaoRepassaOMotivoDoCorpo() throws Exception {
+        when(service.reprovar(ID, "Renda insuficiente"))
+            .thenReturn(proposta(ID, StatusProposta.REPROVADA, "Renda insuficiente", 2L));
+
+        mvc.perform(post("/api/propostas/{id}/reprovacao", ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"motivo": "Renda insuficiente"}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("REPROVADA"))
+            .andExpect(jsonPath("$.motivo").value("Renda insuficiente"));
+
+        verify(service).reprovar(ID, "Renda insuficiente");
+    }
+
+    @Test
+    void cancelamentoRepassaOMotivoDoCorpo() throws Exception {
+        // Motivo com acento de propósito: prova que o UTF-8 atravessa a API nos dois sentidos.
+        when(service.cancelar(ID, "Cliente desistiu da operação"))
+            .thenReturn(proposta(ID, StatusProposta.CANCELADA, "Cliente desistiu da operação", 1L));
+
+        mvc.perform(post("/api/propostas/{id}/cancelamento", ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"motivo": "Cliente desistiu da operação"}
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("CANCELADA"))
+            .andExpect(jsonPath("$.motivo").value("Cliente desistiu da operação"));
+
+        verify(service).cancelar(ID, "Cliente desistiu da operação");
+    }
+
+    // ---------- erros ----------
+
+    @Test
+    void transicaoInvalidaDevolve409() throws Exception {
+        when(service.aprovar(ID))
+            .thenThrow(new TransicaoInvalidaException(StatusProposta.RASCUNHO, StatusProposta.APROVADA));
+
+        mvc.perform(post("/api/propostas/{id}/aprovacao", ID))
+            .andExpect(status().isConflict())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.type").value(TIPO + "transicao-invalida"))
+            .andExpect(jsonPath("$.title").value("Transição de status inválida"))
+            .andExpect(jsonPath("$.status").value(409))
+            .andExpect(jsonPath("$.detail").value("Transição inválida: RASCUNHO -> APROVADA"))
+            .andExpect(jsonPath("$.instance").value("/api/propostas/" + ID + "/aprovacao"));
+    }
+
+    @Test
+    void propostaDesatualizadaDevolve409ComOutroTipo() throws Exception {
+        when(service.cancelar(ID, "Cliente desistiu"))
+            .thenThrow(new PropostaDesatualizadaException(ID));
+
+        mvc.perform(post("/api/propostas/{id}/cancelamento", ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"motivo": "Cliente desistiu"}
+                    """))
+            .andExpect(status().isConflict())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.type").value(TIPO + "proposta-desatualizada"))
+            .andExpect(jsonPath("$.title").value("Proposta alterada por outra operação"))
+            .andExpect(jsonPath("$.detail").value("Proposta foi alterada por outra operação: " + ID));
+    }
+
+    @Test
+    void motivoEmBrancoDevolve422() throws Exception {
+        when(service.reprovar(ID, " "))
+            .thenThrow(new IllegalArgumentException("Motivo é obrigatório para ir para REPROVADA"));
+
+        mvc.perform(post("/api/propostas/{id}/reprovacao", ID)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"motivo": " "}
+                    """))
+            .andExpect(status().isUnprocessableEntity())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
+            .andExpect(jsonPath("$.type").value(TIPO + "dados-invalidos"))
+            .andExpect(jsonPath("$.title").value("Dados inválidos"))
+            .andExpect(jsonPath("$.detail").value("Motivo é obrigatório para ir para REPROVADA"));
+    }
+
+    @Test
+    void jsonMalformadoDevolve400SemChamarOService() throws Exception {
+        mvc.perform(post("/api/propostas")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"valor\": "))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void cancelamentoSemCorpoDevolve400SemChamarOService() throws Exception {
+        mvc.perform(post("/api/propostas/{id}/cancelamento", ID))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+
+        verifyNoInteractions(service);
+    }
 }
