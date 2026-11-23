@@ -4,10 +4,12 @@ import br.com.luiz.workflow.application.PropostaDesatualizadaException;
 import br.com.luiz.workflow.application.PropostaNaoEncontradaException;
 import br.com.luiz.workflow.domain.TransicaoInvalidaException;
 import java.net.URI;
+import java.util.Objects;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.lang.NonNull;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -55,10 +57,13 @@ public class RestErrorHandler {
     /**
      * O status que vale é o do ProblemDetail; o @ResponseStatus em cada handler existe para o
      * springdoc documentar a resposta. Os dois usam o mesmo HttpStatus.
+     *
+     * <p>{@code @NonNull} e {@code requireNonNull}: para a análise de null do VS Code, que não
+     * sabe que um parâmetro nosso ou o retorno de URI.create nunca são nulos.
      */
-    private static ProblemDetail problema(HttpStatus status, String tipo, String titulo, RuntimeException ex) {
+    private static ProblemDetail problema(@NonNull HttpStatus status, String tipo, String titulo, RuntimeException ex) {
         ProblemDetail problema = ProblemDetail.forStatusAndDetail(status, ex.getMessage());
-        problema.setType(URI.create(TIPOS + tipo));
+        problema.setType(Objects.requireNonNull(URI.create(TIPOS + tipo)));
         problema.setTitle(titulo);
         return problema; // "instance" fica vazio: o Spring preenche com o caminho da requisição
     }
