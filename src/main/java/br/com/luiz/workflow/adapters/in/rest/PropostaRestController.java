@@ -1,12 +1,18 @@
 package br.com.luiz.workflow.adapters.in.rest;
 
+import br.com.luiz.workflow.application.PropostaNaoEncontradaException;
 import br.com.luiz.workflow.application.PropostaService;
 import br.com.luiz.workflow.domain.Proposta;
 import java.net.URI;
+import java.util.List;
+import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -33,5 +39,22 @@ public class PropostaRestController {
         Proposta criada = service.criar(corpo.valor(), corpo.prazoMeses());
         URI local = uri.path(BASE + "/{id}").buildAndExpand(criada.id()).toUri();
         return ResponseEntity.created(local).body(PropostaResponse.de(criada));
+    }
+
+    @GetMapping("/{id}")
+    public PropostaResponse buscar(@PathVariable UUID id) {
+        return service.buscar(id)
+            .map(PropostaResponse::de)
+            .orElseThrow(() -> new PropostaNaoEncontradaException(id));
+    }
+
+    /**
+     * Uma página por cursor (item 05). Os dois parâmetros são opcionais: sem limite, o service
+     * aplica o padrão; sem cursor, é a primeira página. Lista vazia = não há mais propostas.
+     */
+    @GetMapping
+    public List<PropostaResponse> listar(@RequestParam(required = false) UUID depoisDe,
+                                         @RequestParam(required = false) Integer limite) {
+        return service.listar(depoisDe, limite).stream().map(PropostaResponse::de).toList();
     }
 }
