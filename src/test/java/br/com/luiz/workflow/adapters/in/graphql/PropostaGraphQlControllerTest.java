@@ -19,6 +19,7 @@ import br.com.luiz.workflow.domain.TransicaoInvalidaException;
 import graphql.ErrorClassification;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
@@ -29,6 +30,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.graphql.ResponseError;
 import org.springframework.graphql.execution.ErrorType;
 import org.springframework.graphql.test.tester.GraphQlTester;
+import org.springframework.lang.NonNull;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @GraphQlTest(PropostaGraphQlController.class)
@@ -73,7 +75,7 @@ class PropostaGraphQlControllerTest {
                 """)
             .variable("id", p.id().toString())
             .execute()
-            .path("proposta.id").entity(String.class).isEqualTo(p.id().toString())
+            .path("proposta.id").entity(String.class).isEqualTo(Objects.requireNonNull(p.id().toString()))
             .path("proposta.valor").entity(String.class).isEqualTo("10000.00")
             .path("proposta.prazoMeses").entity(Integer.class).isEqualTo(24)
             .path("proposta.status").entity(String.class).isEqualTo("EM_ANALISE")
@@ -238,7 +240,7 @@ class PropostaGraphQlControllerTest {
                 """)
             .variable("id", p.id().toString())
             .execute()
-            .path("enviarParaAnalise.id").entity(String.class).isEqualTo(p.id().toString())
+            .path("enviarParaAnalise.id").entity(String.class).isEqualTo(Objects.requireNonNull(p.id().toString()))
             .path("enviarParaAnalise.status").entity(String.class).isEqualTo("EM_ANALISE");
 
         verify(service).enviarParaAnalise(p.id());
@@ -394,10 +396,10 @@ class PropostaGraphQlControllerTest {
         verify(service).aprovar(id);
     }
 
-    private static Consumer<List<ResponseError>> erroUnico(ErrorClassification tipo, String trechoDaMensagem) {
+    private static @NonNull Consumer<List<ResponseError>> erroUnico(ErrorClassification tipo, String trechoDaMensagem) {
         return erros -> {
             List<ResponseError> errosDeNegocio = erros.stream()
-                .filter(respostaErro -> !respostaErro.getMessage().contains("was declared as a non null type"))
+                .filter(respostaErro -> !ehPropagacaoDeNulo(respostaErro))
                 .toList();
             assertThat(errosDeNegocio).hasSize(1);
 
@@ -406,10 +408,19 @@ class PropostaGraphQlControllerTest {
             assertThat(erro.getMessage()).contains(trechoDaMensagem);
 
             long errosDePropagacao = erros.stream()
-                .filter(respostaErro -> respostaErro.getMessage().contains("was declared as a non null type"))
+                .filter(respostaErro -> ehPropagacaoDeNulo(respostaErro))
                 .count();
             assertThat(errosDePropagacao).isEqualTo(erros.size() - 1L);
         };
+    }
+
+    /**
+     * O erro que o graphql-java acrescenta quando um campo não nulo ({@code Proposta!}) fica sem valor.
+     * getMessage() é @Nullable no Spring: um erro pode vir sem mensagem, e aí não é este.
+     */
+    private static boolean ehPropagacaoDeNulo(ResponseError erro) {
+        String mensagem = erro.getMessage();
+        return mensagem != null && mensagem.contains("was declared as a non null type");
     }
 
     private static Proposta rascunho() {

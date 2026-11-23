@@ -6,6 +6,7 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.lang.NonNull;
 
 @Entity
 @Table(name = "proposta")
@@ -42,7 +43,7 @@ class PropostaEntity {
 
     protected PropostaEntity() {} // exigido pelo JPA
 
-    static PropostaEntity de(Proposta p) {
+    static @NonNull PropostaEntity de(Proposta p) {
         PropostaEntity e = new PropostaEntity();
         e.id = p.id();
         e.valor = p.valor();

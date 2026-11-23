@@ -4,6 +4,7 @@ import br.com.luiz.workflow.application.PropostaDesatualizadaException;
 import br.com.luiz.workflow.application.port.out.PropostaRepository;
 import br.com.luiz.workflow.domain.Proposta;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
@@ -36,7 +37,7 @@ class PropostaRepositoryJpa implements PropostaRepository {
 
     @Override
     public Optional<Proposta> buscarPorId(UUID id) {
-        return jpa.findById(id).map(PropostaEntity::paraDominio);
+        return jpa.findById(Objects.requireNonNull(id, "id")).map(entidade -> entidade.paraDominio());
     }
 
     /**
@@ -50,6 +51,6 @@ class PropostaRepositoryJpa implements PropostaRepository {
         List<PropostaEntity> pagina = (depoisDe == null)
             ? jpa.primeiraPagina(limite)
             : jpa.paginaApos(depoisDe, limite);
-        return pagina.stream().map(PropostaEntity::paraDominio).toList();
+        return pagina.stream().map(entidade -> entidade.paraDominio()).toList();
     }
 }
