@@ -105,9 +105,9 @@ src/test/java/br/com/luiz/workflow/
 
 - Java 21
 - Maven 3.6.3 or later
-- PostgreSQL to run the application (configured at `localhost:5433`, database `workflow_db`)
+- PostgreSQL to run the application (`localhost:5432` by default, database `workflow_db`)
 
-Credentials can be configured through the `DB_USER` and `DB_PASSWORD` environment variables; both default to `postgres`. Flyway migrations are applied when the application starts.
+The port and credentials can be configured through the `DB_PORT`, `DB_USER` and `DB_PASSWORD` environment variables; the port defaults to `5432`, and the user and password default to `postgres`. Flyway migrations are applied when the application starts.
 
 ## Run
 
