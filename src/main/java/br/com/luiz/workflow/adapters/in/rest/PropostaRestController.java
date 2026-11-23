@@ -19,6 +19,9 @@ import org.springframework.web.util.UriComponentsBuilder;
 /**
  * Adaptador de entrada REST. Só traduz HTTP para os casos de uso do {@link PropostaService}
  * e o resultado de volta para HTTP; nenhuma regra de negócio mora aqui.
+ *
+ * <p>Transições são ações (POST em um substantivo sob o recurso), nunca PATCH do campo status:
+ * cada ação preserva a intenção, as exigências próprias (motivo) e pode ser autorizada à parte.
  */
 @RestController
 @RequestMapping(PropostaRestController.BASE)
@@ -56,5 +59,30 @@ public class PropostaRestController {
     public List<PropostaResponse> listar(@RequestParam(required = false) UUID depoisDe,
                                          @RequestParam(required = false) Integer limite) {
         return service.listar(depoisDe, limite).stream().map(PropostaResponse::de).toList();
+    }
+
+    @PostMapping("/{id}/envio-para-analise")
+    public PropostaResponse enviarParaAnalise(@PathVariable UUID id) {
+        return PropostaResponse.de(service.enviarParaAnalise(id));
+    }
+
+    @PostMapping("/{id}/pedido-de-documentos")
+    public PropostaResponse pedirDocumentos(@PathVariable UUID id) {
+        return PropostaResponse.de(service.pedirDocumentos(id));
+    }
+
+    @PostMapping("/{id}/aprovacao")
+    public PropostaResponse aprovar(@PathVariable UUID id) {
+        return PropostaResponse.de(service.aprovar(id));
+    }
+
+    @PostMapping("/{id}/reprovacao")
+    public PropostaResponse reprovar(@PathVariable UUID id, @RequestBody MotivoRequest corpo) {
+        return PropostaResponse.de(service.reprovar(id, corpo.motivo()));
+    }
+
+    @PostMapping("/{id}/cancelamento")
+    public PropostaResponse cancelar(@PathVariable UUID id, @RequestBody MotivoRequest corpo) {
+        return PropostaResponse.de(service.cancelar(id, corpo.motivo()));
     }
 }
