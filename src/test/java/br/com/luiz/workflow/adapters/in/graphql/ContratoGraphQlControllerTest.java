@@ -226,6 +226,26 @@ class ContratoGraphQlControllerTest {
             .path("propostas[2].contrato").valueIsNull();
     }
 
+    @Test
+    void contratosDaPaginaSaoBuscadosNumaChamadaSo() {
+        Proposta p1 = propostaAprovada();
+        Proposta p2 = propostaAprovada();
+        Proposta p3 = propostaAprovada();
+        when(propostaService.listar(any(), any())).thenReturn(List.of(p1, p2, p3));
+        existemContratos(contratoDa(p1, StatusContrato.GERADO));
+
+        graphQlTester.document("""
+                query { propostas { id contrato { status } } }
+                """)
+            .execute()
+            .errors().verify();
+
+        // UMA chamada com os 3 ids (no adaptador JPA, um SELECT ... IN) e nenhuma busca unitária.
+        verify(contratoService).buscarPorPropostas(argThat(ids ->
+            ids.size() == 3 && ids.containsAll(List.of(p1.id(), p2.id(), p3.id()))));
+        verify(contratoService, never()).buscarPorProposta(any());
+    }
+
     // ===== apoio =====
 
     private GraphQlTester.Response assinar(UUID id) {
