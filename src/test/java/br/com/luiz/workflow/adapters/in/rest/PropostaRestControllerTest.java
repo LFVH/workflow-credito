@@ -22,15 +22,12 @@ import br.com.luiz.workflow.domain.StatusProposta;
 import br.com.luiz.workflow.domain.TransicaoInvalidaException;
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import org.hamcrest.Matcher;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
-import org.springframework.lang.NonNull;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -47,11 +44,6 @@ class PropostaRestControllerTest {
     /** Por extenso de propósito: o teste é o contrato e percebe se a produção mudar a URL sem querer. */
     private static final String TIPO = "https://github.com/LFVH/workflow-credito/blob/main/docs/problemas.md#";
 
-    // As constantes do Spring e os matchers do Hamcrest não têm anotação de null; com @NonNull e
-    // requireNonNull, a análise de null do VS Code sabe que eles nunca são nulos.
-    private static final @NonNull MediaType JSON = Objects.requireNonNull(MediaType.APPLICATION_JSON);
-    private static final @NonNull MediaType PROBLEM_JSON = Objects.requireNonNull(MediaType.APPLICATION_PROBLEM_JSON);
-
     @Autowired
     MockMvc mvc;
 
@@ -62,10 +54,6 @@ class PropostaRestControllerTest {
         return Proposta.reconstituir(id, new BigDecimal("1500.50"), 12, status, motivo, versao);
     }
 
-    private static @NonNull <T> Matcher<T> naoNulo(Matcher<T> matcher) {
-        return Objects.requireNonNull(matcher);
-    }
-
     // ---------- criação ----------
 
     @Test
@@ -73,19 +61,19 @@ class PropostaRestControllerTest {
         when(service.criar(any(), anyInt())).thenReturn(proposta(ID, StatusProposta.RASCUNHO, null, 0L));
 
         mvc.perform(post("/api/propostas")
-                .contentType(JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"valor": "1500.50", "prazoMeses": 12}
                     """))
             .andExpect(status().isCreated())
-            .andExpect(header().string("Location", naoNulo(endsWith("/api/propostas/" + ID))))
-            .andExpect(content().contentTypeCompatibleWith(JSON))
+            .andExpect(header().string("Location", endsWith("/api/propostas/" + ID)))
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
             .andExpect(jsonPath("$.id").value(ID.toString()))
             .andExpect(jsonPath("$.valor").isString())
             .andExpect(jsonPath("$.valor").value("1500.50"))
             .andExpect(jsonPath("$.prazoMeses").value(12))
             .andExpect(jsonPath("$.status").value("RASCUNHO"))
-            .andExpect(jsonPath("$.transicoesPossiveis", naoNulo(contains("EM_ANALISE", "CANCELADA"))))
+            .andExpect(jsonPath("$.transicoesPossiveis", contains("EM_ANALISE", "CANCELADA")))
             .andExpect(jsonPath("$.versao").value(0));
 
         verify(service).criar(new BigDecimal("1500.50"), 12);
@@ -96,7 +84,7 @@ class PropostaRestControllerTest {
         when(service.criar(any(), anyInt())).thenReturn(proposta(ID, StatusProposta.RASCUNHO, null, 0L));
 
         mvc.perform(post("/api/propostas")
-                .contentType(JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"valor": 1500.50, "prazoMeses": 12}
                     """))
@@ -113,7 +101,7 @@ class PropostaRestControllerTest {
         when(service.criar(any(), anyInt())).thenReturn(Proposta.nova(new BigDecimal("1E+3"), 12));
 
         mvc.perform(post("/api/propostas")
-                .contentType(JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"valor": 1E3, "prazoMeses": 12}
                     """))
@@ -132,7 +120,7 @@ class PropostaRestControllerTest {
             .andExpect(jsonPath("$.id").value(ID.toString()))
             .andExpect(jsonPath("$.status").value("EM_ANALISE"))
             .andExpect(jsonPath("$.transicoesPossiveis",
-                naoNulo(contains("PENDENTE_DOCUMENTOS", "APROVADA", "REPROVADA", "CANCELADA"))))
+                contains("PENDENTE_DOCUMENTOS", "APROVADA", "REPROVADA", "CANCELADA")))
             .andExpect(jsonPath("$.versao").value(1));
     }
 
@@ -142,7 +130,7 @@ class PropostaRestControllerTest {
 
         mvc.perform(get("/api/propostas/{id}", ID))
             .andExpect(status().isNotFound())
-            .andExpect(content().contentTypeCompatibleWith(PROBLEM_JSON))
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.type").value(TIPO + "proposta-nao-encontrada"))
             .andExpect(jsonPath("$.title").value("Proposta não encontrada"))
             .andExpect(jsonPath("$.status").value(404))
@@ -154,7 +142,7 @@ class PropostaRestControllerTest {
     void idMalformadoDevolve400SemChamarOService() throws Exception {
         mvc.perform(get("/api/propostas/{id}", "nao-e-uuid"))
             .andExpect(status().isBadRequest())
-            .andExpect(content().contentTypeCompatibleWith(PROBLEM_JSON))
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.status").value(400));
 
         verifyNoInteractions(service);
@@ -170,7 +158,7 @@ class PropostaRestControllerTest {
 
         mvc.perform(get("/api/propostas"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$", naoNulo(hasSize(2))))
+            .andExpect(jsonPath("$", hasSize(2)))
             .andExpect(jsonPath("$[0].id").value(ID.toString()))
             .andExpect(jsonPath("$[1].id").value(OUTRO_ID.toString()))
             .andExpect(jsonPath("$[1].valor").value("1500.50"))
@@ -188,7 +176,7 @@ class PropostaRestControllerTest {
                 .param("depoisDe", ID.toString())
                 .param("limite", "10"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$", naoNulo(hasSize(0))));
+            .andExpect(jsonPath("$", hasSize(0)));
 
         verify(service).listar(ID, 10);
     }
@@ -200,7 +188,7 @@ class PropostaRestControllerTest {
 
         mvc.perform(get("/api/propostas").param("limite", "500"))
             .andExpect(status().isUnprocessableEntity())
-            .andExpect(content().contentTypeCompatibleWith(PROBLEM_JSON))
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.type").value(TIPO + "dados-invalidos"))
             .andExpect(jsonPath("$.detail").value("Limite deve estar entre 1 e 100"));
     }
@@ -226,7 +214,7 @@ class PropostaRestControllerTest {
         mvc.perform(post("/api/propostas/{id}/pedido-de-documentos", ID))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("PENDENTE_DOCUMENTOS"))
-            .andExpect(jsonPath("$.transicoesPossiveis", naoNulo(contains("EM_ANALISE", "CANCELADA"))));
+            .andExpect(jsonPath("$.transicoesPossiveis", contains("EM_ANALISE", "CANCELADA")));
 
         verify(service).pedirDocumentos(ID);
     }
@@ -238,7 +226,7 @@ class PropostaRestControllerTest {
         mvc.perform(post("/api/propostas/{id}/aprovacao", ID))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.status").value("APROVADA"))
-            .andExpect(jsonPath("$.transicoesPossiveis", naoNulo(hasSize(0))));
+            .andExpect(jsonPath("$.transicoesPossiveis", hasSize(0)));
 
         verify(service).aprovar(ID);
     }
@@ -249,7 +237,7 @@ class PropostaRestControllerTest {
             .thenReturn(proposta(ID, StatusProposta.REPROVADA, "Renda insuficiente", 2L));
 
         mvc.perform(post("/api/propostas/{id}/reprovacao", ID)
-                .contentType(JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"motivo": "Renda insuficiente"}
                     """))
@@ -267,7 +255,7 @@ class PropostaRestControllerTest {
             .thenReturn(proposta(ID, StatusProposta.CANCELADA, "Cliente desistiu da operação", 1L));
 
         mvc.perform(post("/api/propostas/{id}/cancelamento", ID)
-                .contentType(JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"motivo": "Cliente desistiu da operação"}
                     """))
@@ -287,7 +275,7 @@ class PropostaRestControllerTest {
 
         mvc.perform(post("/api/propostas/{id}/aprovacao", ID))
             .andExpect(status().isConflict())
-            .andExpect(content().contentTypeCompatibleWith(PROBLEM_JSON))
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.type").value(TIPO + "transicao-invalida"))
             .andExpect(jsonPath("$.title").value("Transição de status inválida"))
             .andExpect(jsonPath("$.status").value(409))
@@ -301,12 +289,12 @@ class PropostaRestControllerTest {
             .thenThrow(new PropostaDesatualizadaException(ID));
 
         mvc.perform(post("/api/propostas/{id}/cancelamento", ID)
-                .contentType(JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"motivo": "Cliente desistiu"}
                     """))
             .andExpect(status().isConflict())
-            .andExpect(content().contentTypeCompatibleWith(PROBLEM_JSON))
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.type").value(TIPO + "proposta-desatualizada"))
             .andExpect(jsonPath("$.title").value("Proposta alterada por outra operação"))
             .andExpect(jsonPath("$.detail").value("Proposta foi alterada por outra operação: " + ID));
@@ -318,12 +306,12 @@ class PropostaRestControllerTest {
             .thenThrow(new IllegalArgumentException("Motivo é obrigatório para ir para REPROVADA"));
 
         mvc.perform(post("/api/propostas/{id}/reprovacao", ID)
-                .contentType(JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {"motivo": " "}
                     """))
             .andExpect(status().isUnprocessableEntity())
-            .andExpect(content().contentTypeCompatibleWith(PROBLEM_JSON))
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
             .andExpect(jsonPath("$.type").value(TIPO + "dados-invalidos"))
             .andExpect(jsonPath("$.title").value("Dados inválidos"))
             .andExpect(jsonPath("$.detail").value("Motivo é obrigatório para ir para REPROVADA"));
@@ -332,10 +320,10 @@ class PropostaRestControllerTest {
     @Test
     void jsonMalformadoDevolve400SemChamarOService() throws Exception {
         mvc.perform(post("/api/propostas")
-                .contentType(JSON)
+                .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"valor\": "))
             .andExpect(status().isBadRequest())
-            .andExpect(content().contentTypeCompatibleWith(PROBLEM_JSON));
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
 
         verifyNoInteractions(service);
     }
@@ -344,7 +332,7 @@ class PropostaRestControllerTest {
     void cancelamentoSemCorpoDevolve400SemChamarOService() throws Exception {
         mvc.perform(post("/api/propostas/{id}/cancelamento", ID))
             .andExpect(status().isBadRequest())
-            .andExpect(content().contentTypeCompatibleWith(PROBLEM_JSON));
+            .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
 
         verifyNoInteractions(service);
     }
