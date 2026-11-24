@@ -1,11 +1,16 @@
 package br.com.luiz.workflow.adapters.in.graphql;
 
 import br.com.luiz.workflow.application.ContratoService;
+import br.com.luiz.workflow.domain.Contrato;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.graphql.data.method.annotation.Argument;
+import org.springframework.graphql.data.method.annotation.BatchMapping;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
-import org.springframework.graphql.data.method.annotation.SchemaMapping;
 import org.springframework.stereotype.Controller;
 
 @Controller
@@ -48,12 +53,21 @@ public class ContratoGraphQlController {
     }
 
     /**
-     * Campo Proposta.contrato, VERSÃO INGÊNUA: o graphql-java chama este método uma vez
-     * para CADA proposta da resposta. Uma página de N propostas = N buscas = N SELECTs (o N+1).
-     * typeName explícito: sem ele, o Spring deduziria "PropostaPayload" pelo nome da classe.
+     * Campo Proposta.contrato EM LOTE. O Spring for GraphQL registra este método como um
+     * DataLoader: em vez de resolver o campo proposta a proposta, ele junta as propostas da
+     * resposta e chama este método UMA vez. Uma chamada ao service, um SELECT ... IN.
+     * Retorno em Map: proposta que não está no mapa recebe null (= ainda sem contrato).
+     * typeName explícito: o Spring deduziria "PropostaPayload" pelo tipo dos elementos da lista.
      */
-    @SchemaMapping(typeName = "Proposta", field = "contrato")
-    public ContratoPayload contratoDaProposta(PropostaPayload proposta) {
-        return service.buscarPorProposta(proposta.id()).map(ContratoPayload::de).orElse(null);
+    @BatchMapping(typeName = "Proposta", field = "contrato")
+    public Map<PropostaPayload, ContratoPayload> contratoDaProposta(List<PropostaPayload> propostas) {
+        List<UUID> ids = propostas.stream().map(PropostaPayload::id).toList();
+
+        Map<UUID, ContratoPayload> porPropostaId = service.buscarPorPropostas(ids).stream()
+            .collect(Collectors.toMap(Contrato::propostaId, ContratoPayload::de));
+
+        return propostas.stream()
+            .filter(p -> porPropostaId.containsKey(p.id())) // toMap não aceita valor null
+            .collect(Collectors.toMap(Function.identity(), p -> porPropostaId.get(p.id())));
     }
 }
