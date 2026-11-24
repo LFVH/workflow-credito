@@ -1,5 +1,7 @@
 package br.com.luiz.workflow.adapters.in.graphql;
 
+import br.com.luiz.workflow.application.ContratoDesatualizadoException;
+import br.com.luiz.workflow.application.ContratoNaoEncontradoException;
 import br.com.luiz.workflow.application.PropostaDesatualizadaException;
 import br.com.luiz.workflow.application.PropostaNaoEncontradaException;
 import br.com.luiz.workflow.domain.TransicaoInvalidaException;
@@ -16,14 +18,14 @@ public class GraphQlErrorHandler {
         return GraphQLError.newError().errorType(ErrorType.BAD_REQUEST).message(ex.getMessage()).build();
     }
 
-    @GraphQlExceptionHandler
-    public GraphQLError naoEncontrada(PropostaNaoEncontradaException ex) {
+    @GraphQlExceptionHandler({PropostaNaoEncontradaException.class, ContratoNaoEncontradoException.class})
+    public GraphQLError naoEncontrado(RuntimeException ex) {
         return GraphQLError.newError().errorType(ErrorType.NOT_FOUND).message(ex.getMessage()).build();
     }
 
-    /** Lock otimista: outra operação gravou antes. O cliente deve reler a proposta e decidir de novo. */
-    @GraphQlExceptionHandler
-    public GraphQLError desatualizada(PropostaDesatualizadaException ex) {
+    /** Lock otimista: outra operação gravou antes. O cliente deve reler e decidir de novo. */
+    @GraphQlExceptionHandler({PropostaDesatualizadaException.class, ContratoDesatualizadoException.class})
+    public GraphQLError desatualizado(RuntimeException ex) {
         return GraphQLError.newError().errorType(ClassificacaoDeErro.CONFLITO).message(ex.getMessage()).build();
     }
 }

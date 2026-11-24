@@ -9,6 +9,14 @@ enum StatusProposta {
     CANCELADA
 }
 
+enum StatusContrato {
+    GERADO
+    ASSINADO
+    ATIVO
+    LIQUIDADO
+    CANCELADO
+}
+
 type Proposta {
     id: ID!
     valor: Decimal!
@@ -16,6 +24,19 @@ type Proposta {
     status: StatusProposta!
     motivo: String
     transicoesPossiveis: [StatusProposta!]!
+}
+
+"Contrato de crédito, gerado a partir de uma proposta aprovada."
+type Contrato {
+    id: ID!
+    "Id da proposta que originou o contrato (referência por id)."
+    propostaId: ID!
+    "Valor aprovado, copiado da proposta no momento da geração."
+    valor: Decimal!
+    prazoMeses: Int!
+    status: StatusContrato!
+    motivo: String
+    transicoesPossiveis: [StatusContrato!]!
 }
 
 type Query {
@@ -32,6 +53,8 @@ type Query {
         "Tamanho da página, de 1 a 100. Omitido: 20."
         limite: Int
     ): [Proposta!]!
+
+    contrato(id: ID!): Contrato
 }
 
 type Mutation {
@@ -41,4 +64,12 @@ type Mutation {
     aprovarProposta(id: ID!): Proposta!
     reprovarProposta(id: ID!, motivo: String!): Proposta!
     cancelarProposta(id: ID!, motivo: String!): Proposta!
+
+    "Gera o contrato de uma proposta APROVADA. Idempotente: se já existir, devolve o existente."
+    gerarContrato(propostaId: ID!): Contrato!
+    assinarContrato(id: ID!): Contrato!
+    "Contrato ativo = dinheiro liberado. A partir daqui não cancela: só liquida."
+    ativarContrato(id: ID!): Contrato!
+    liquidarContrato(id: ID!): Contrato!
+    cancelarContrato(id: ID!, motivo: String!): Contrato!
 }
