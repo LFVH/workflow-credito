@@ -5,6 +5,7 @@ import java.util.UUID;
 import org.springframework.graphql.data.method.annotation.Argument;
 import org.springframework.graphql.data.method.annotation.MutationMapping;
 import org.springframework.graphql.data.method.annotation.QueryMapping;
+import org.springframework.graphql.data.method.annotation.SchemaMapping;
 import org.springframework.stereotype.Controller;
 
 @Controller
@@ -44,5 +45,15 @@ public class ContratoGraphQlController {
     @MutationMapping
     public ContratoPayload cancelarContrato(@Argument UUID id, @Argument String motivo) {
         return ContratoPayload.de(service.cancelar(id, motivo));
+    }
+
+    /**
+     * Campo Proposta.contrato, VERSÃO INGÊNUA: o graphql-java chama este método uma vez
+     * para CADA proposta da resposta. Uma página de N propostas = N buscas = N SELECTs (o N+1).
+     * typeName explícito: sem ele, o Spring deduziria "PropostaPayload" pelo nome da classe.
+     */
+    @SchemaMapping(typeName = "Proposta", field = "contrato")
+    public ContratoPayload contratoDaProposta(PropostaPayload proposta) {
+        return service.buscarPorProposta(proposta.id()).map(ContratoPayload::de).orElse(null);
     }
 }

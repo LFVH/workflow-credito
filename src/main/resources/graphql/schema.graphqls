@@ -24,6 +24,8 @@ type Proposta {
     status: StatusProposta!
     motivo: String
     transicoesPossiveis: [StatusProposta!]!
+    "Contrato gerado a partir desta proposta; null enquanto não houver."
+    contrato: Contrato
 }
 
 "Contrato de crédito, gerado a partir de uma proposta aprovada."
