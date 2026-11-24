@@ -204,6 +204,28 @@ class ContratoGraphQlControllerTest {
 
     // ===== Proposta.contrato e o N+1: entram nos passos 23 e 27 =====
 
+    @Test
+    void cadaPropostaTrazOProprioContrato() {
+        Proposta comContratoGerado = propostaAprovada();
+        Proposta comContratoAtivo = propostaAprovada();
+        Proposta semContrato = propostaAprovada();
+        when(propostaService.listar(any(), any()))
+            .thenReturn(List.of(comContratoGerado, comContratoAtivo, semContrato));
+        existemContratos(
+            contratoDa(comContratoGerado, StatusContrato.GERADO),
+            contratoDa(comContratoAtivo, StatusContrato.ATIVO));
+
+        graphQlTester.document("""
+                query { propostas { id contrato { propostaId status } } }
+                """)
+            .execute()
+            .path("propostas[0].contrato.propostaId").entity(String.class)
+                .isEqualTo(comContratoGerado.id().toString())
+            .path("propostas[0].contrato.status").entity(String.class).isEqualTo("GERADO")
+            .path("propostas[1].contrato.status").entity(String.class).isEqualTo("ATIVO")
+            .path("propostas[2].contrato").valueIsNull();
+    }
+
     // ===== apoio =====
 
     private GraphQlTester.Response assinar(UUID id) {
@@ -250,5 +272,32 @@ class ContratoGraphQlControllerTest {
         String motivo = (status == StatusContrato.CANCELADO) ? "Cliente desistiu" : null;
         return Contrato.reconstituir(UUID.randomUUID(), UUID.randomUUID(), new BigDecimal("15000.00"), 36,
             status, motivo, 0L);
+    }
+
+    /**
+     * Stuba AS DUAS formas de busca (uma a uma e em lote) a partir da mesma lista de contratos.
+     * Assim o teste de resultado vale tanto para o @SchemaMapping quanto para o @BatchMapping.
+     */
+    private void existemContratos(Contrato... contratos) {
+        List<Contrato> todos = List.of(contratos);
+        when(contratoService.buscarPorProposta(any())).thenAnswer(invocacao -> {
+            UUID propostaId = invocacao.getArgument(0);
+            return todos.stream().filter(c -> c.propostaId().equals(propostaId)).findFirst();
+        });
+        when(contratoService.buscarPorPropostas(anyCollection())).thenAnswer(invocacao -> {
+            Collection<UUID> propostaIds = invocacao.getArgument(0);
+            return todos.stream().filter(c -> propostaIds.contains(c.propostaId())).toList();
+        });
+    }
+
+    /** Proposta aprovada qualquer (o mock do PropostaService é quem a "devolve"). */
+    private static Proposta propostaAprovada() {
+        return Proposta.reconstituir(UUID.randomUUID(), new BigDecimal("15000.00"), 36,
+            StatusProposta.APROVADA, null, 0L);
+    }
+
+    private static Contrato contratoDa(Proposta proposta, StatusContrato status) {
+        return Contrato.reconstituir(UUID.randomUUID(), proposta.id(), proposta.valor(), proposta.prazoMeses(),
+            status, null, 0L);
     }
 }
