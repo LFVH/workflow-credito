@@ -26,9 +26,9 @@ public class PropostaService {
         return repository.salvar(Proposta.nova(valor, prazoMeses));
     }
 
-    public Proposta enviarParaAnalise(UUID id)  { return transicionar(id, proposta -> proposta.enviarParaAnalise()); }
-    public Proposta pedirDocumentos(UUID id)    { return transicionar(id, proposta -> proposta.pedirDocumentos()); }
-    public Proposta aprovar(UUID id)            { return transicionar(id, proposta -> proposta.aprovar()); }
+    public Proposta enviarParaAnalise(UUID id)  { return transicionar(id, Proposta::enviarParaAnalise); }
+    public Proposta pedirDocumentos(UUID id)    { return transicionar(id, Proposta::pedirDocumentos); }
+    public Proposta aprovar(UUID id)            { return transicionar(id, Proposta::aprovar); }
     public Proposta reprovar(UUID id, String motivo) {
         return transicionar(id, proposta -> proposta.reprovar(motivo));
     }

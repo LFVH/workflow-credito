@@ -188,7 +188,7 @@ class PropostaServiceTest {
     }
 
     private static List<UUID> ids(List<Proposta> propostas) {
-        return propostas.stream().map(proposta -> proposta.id()).toList();
+        return propostas.stream().map(Proposta::id).toList();
     }
 
     /**
