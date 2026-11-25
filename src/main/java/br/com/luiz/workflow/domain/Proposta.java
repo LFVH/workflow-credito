@@ -73,4 +73,15 @@ public class Proposta {
     public String motivo()            { return motivo; }
     public Long versao()              { return versao; }
     public List<MudancaDeStatus> eventos() { return List.copyOf(eventos); }
+
+    /**
+     * Entrega os eventos pendentes, na ordem, e esvazia a lista: cada evento sai UMA vez.
+     * O caso de uso publica o que recebeu; se o mesmo objeto fosse salvo e publicado
+     * de novo, não haveria evento repetido.
+     */
+    public List<MudancaDeStatus> retirarEventos() {
+        List<MudancaDeStatus> retirados = List.copyOf(eventos);
+        eventos.clear();
+        return retirados;
+    }
 }
