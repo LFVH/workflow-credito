@@ -162,4 +162,30 @@ class PropostaTest {
         assertThat(p.versao()).isEqualTo(3L);
         assertThat(p.eventos()).isEmpty();
     }
+
+    // ===== eventos (fase 5) =====
+
+    @Test
+    void retirarEventosDevolveNaOrdemEEsvazia() {
+        Proposta p = propostaNova();
+        p.enviarParaAnalise();
+        p.aprovar();
+
+        assertThat(p.retirarEventos()).containsExactly(
+            new MudancaDeStatus(p.id(), StatusProposta.RASCUNHO, StatusProposta.EM_ANALISE),
+            new MudancaDeStatus(p.id(), StatusProposta.EM_ANALISE, StatusProposta.APROVADA));
+
+        // Cada evento sai uma vez só: a segunda retirada vem vazia.
+        assertThat(p.retirarEventos()).isEmpty();
+        assertThat(p.eventos()).isEmpty();
+    }
+
+    @Test
+    void transicaoRecusadaNaoDeixaEventoParaRetirar() {
+        Proposta p = propostaNova();
+
+        assertThatThrownBy(p::aprovar).isInstanceOf(TransicaoInvalidaException.class);
+
+        assertThat(p.retirarEventos()).isEmpty();
+    }
 }
