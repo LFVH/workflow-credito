@@ -2,7 +2,7 @@
 
 A practical study project about a credit application workflow, built to explore Java, Spring Boot, hexagonal architecture, relational persistence, testing, and messaging in a financial domain.
 
-> **Current status:** Phases 1, 2, and 3 are complete. The application includes the domain and use cases, a GraphQL API, PostgreSQL persistence with JPA, and Flyway migrations. Phase 4 will implement the Outbox pattern and publish events with Kafka.
+> **Current status:** Phases 1, 2, 3, and 5 are complete. The numbering follows the original plan: Phase 4 (the GraphQL API) was brought forward into Phase 2. The application includes the domain and use cases, GraphQL and REST APIs, PostgreSQL persistence with JPA and Flyway, the `Contrato` aggregate, and domain events published to Kafka through a transactional outbox. Phase 6 will run the whole stack with Docker Compose behind Spring Cloud Gateway.
 
 ## Goal
 
@@ -74,11 +74,38 @@ The goal is to learn and practice, incrementally, how to build a backend for man
 - The field is now resolved with `@BatchMapping`, backed by a `DataLoader`: the contracts of the whole page are loaded with a single `SELECT ... WHERE proposta_id IN (...)`, so any page costs 2 statements. The page size is capped at 100, so the `IN` list never exceeds 100 ids.
 - A GraphQL slice test fails if contracts are fetched one proposal at a time, and a Testcontainers test uses Hibernate statistics to assert that the batch lookup issues a single SQL statement.
 
-### Phase 4: Outbox and Kafka
+### Phase 5: Outbox and Kafka
 
-- Persist domain events in the same transaction as the proposal using the Outbox pattern.
-- Publish Outbox events to a Kafka topic through a relay.
-- Validate the flow between the transaction, event persistence, and publication.
+- Every use case that changes state runs in a single database transaction through the `Transacao` port, implemented with Spring's `TransactionTemplate` (`TransacaoSpring`). The application layer still has no Spring annotations.
+- `Proposta.retirarEventos()` hands over the pending domain events exactly once. In the same transaction that updates the proposal, `OutboxPublicadorDeEventos` inserts one row per event into `outbox_evento` (Flyway `V6`, `payload` stored as `jsonb`). There is no dual write: the new status and its events are committed together, or not at all.
+- `OutboxRelay` reads pending rows in batches with `SELECT ... FOR UPDATE SKIP LOCKED`, so concurrent instances never pick the same row and never wait for each other. It publishes them to the `propostas.status-alterado` topic (3 partitions) with the proposal id as the key, so all events of a proposal land on the same partition, in order, and then sets `publicado_em`. A failed send increments `tentativas` and stops the batch, which keeps the order.
+- Delivery is at least once, so the consumer is idempotent. `PropostaAprovadaListener` (consumer group `workflow-contratos`) generates the contract when a proposal is approved: an inbox table (`evento_processado`, Flyway `V7`) skips events that were already processed, in the same transaction as the contract, and `ContratoService.gerarPara` returns the existing contract, backed by `UNIQUE (proposta_id)`.
+- The relay and the consumer are off by default (`OUTBOX_RELAY`, `KAFKA_LISTENERS`), so the application still starts without Kafka. Business transactions never depend on Kafka: while it is down, events wait in the outbox.
+
+```mermaid
+sequenceDiagram
+    participant C as GraphQL or REST client
+    participant S as PropostaService
+    participant DB as PostgreSQL
+    participant R as OutboxRelay
+    participant K as Kafka topic
+    participant L as PropostaAprovadaListener
+
+    C->>S: aprovarProposta(id)
+    Note over S,DB: one transaction
+    S->>DB: UPDATE proposta ... WHERE versao = ?
+    S->>DB: INSERT INTO outbox_evento
+    S-->>C: APROVADA
+    loop every second
+        R->>DB: SELECT ... FOR UPDATE SKIP LOCKED
+        R->>K: send(key = proposal id, header eventoId)
+        R->>DB: UPDATE outbox_evento SET publicado_em = now()
+    end
+    K->>L: propostas.status-alterado (para = APROVADA)
+    Note over L,DB: one transaction
+    L->>DB: INSERT INTO evento_processado ON CONFLICT DO NOTHING
+    L->>DB: INSERT INTO contrato (only if the proposal has none)
+```
 
 ## State machine
 
@@ -105,7 +132,7 @@ An active contract cannot be cancelled: the money has already been disbursed, so
 
 ## Architecture and structure
 
-The domain core does not depend on Spring. The application depends on the `PropostaRepository` port; the adapters implement two inbound adapters, GraphQL and REST, and the JPA/PostgreSQL outbound adapter. Flyway manages schema evolution. The Outbox and Kafka relay are the next steps for the project.
+The domain core does not depend on Spring. The application depends on the `PropostaRepository` port; the adapters implement two inbound adapters, GraphQL and REST, and the JPA/PostgreSQL outbound adapter. Flyway manages schema evolution. State changes leave the application as events: the use cases depend on the `Transacao` and `PublicadorDeEventos` ports, an outbound adapter writes the events to an outbox table in the same transaction, a relay publishes them to Kafka, and an inbound Kafka adapter generates contracts.
 
 ```text
 src/main/java/br/com/luiz/workflow/
@@ -125,6 +152,8 @@ src/main/java/br/com/luiz/workflow/
 |-- adapters/
 |   |-- in/graphql/                      # GraphQL API and payloads
 |   |-- in/rest/                         # REST API, request/response records, RFC 9457 errors
+|   |-- in/messaging/                    # Kafka consumer that generates contracts
+|   |-- out/outbox/                      # Transactional outbox, message format, and Kafka relay
 |   `-- out/persistence/                 # JPA adapter and entities
 |-- config/BeansConfig.java              # Dependency wiring
 `-- WorkflowApplication.java
@@ -138,6 +167,9 @@ src/test/java/br/com/luiz/workflow/
 |-- domain/                              # Business rule and transition tests
 |-- application/                         # Use case tests
 |-- adapters/in/rest/                    # REST adapter tests with MockMvc
+|-- adapters/in/messaging/               # Kafka consumer tests (Mockito, no Kafka needed)
+|-- adapters/out/outbox/                 # Outbox adapter tests (PostgreSQL via Testcontainers)
+|-- FluxoOutboxKafkaTest.java            # End-to-end outbox, Kafka, and consumer test
 `-- adapters/out/persistence/            # JPA/PostgreSQL integration tests
 ```
 
@@ -146,6 +178,7 @@ src/test/java/br/com/luiz/workflow/
 - Java 21
 - Maven 3.6.3 or later
 - PostgreSQL to run the application (`localhost:5432` by default, database `workflow_db`)
+- Docker, only for the Kafka flow and the Testcontainers tests. GitHub Codespaces (configured in `.devcontainer/`) and GitHub Actions provide it. Without Docker, those tests are skipped and the application still runs, without Kafka.
 
 The port and credentials can be configured through the `DB_PORT`, `DB_USER` and `DB_PASSWORD` environment variables; the port defaults to `5432`, and the user and password default to `postgres`. Flyway migrations are applied when the application starts.
 
@@ -163,6 +196,23 @@ Once the application is running, open:
 - GraphQL endpoint: `http://localhost:8080/graphql`
 - REST API: `http://localhost:8080/api/propostas`
 - Swagger UI: `http://localhost:8080/swagger-ui.html`
+
+### Run with Kafka (GitHub Codespaces or any machine with Docker)
+
+`compose.yaml` starts PostgreSQL (port 5432) and a single-node Kafka in KRaft mode (port 9092). The outbox relay and the Kafka consumer are switched on with environment variables:
+
+```bash
+docker compose up -d --wait
+OUTBOX_RELAY=true KAFKA_LISTENERS=true mvn spring-boot:run
+```
+
+Approve a proposal and the Kafka consumer generates its contract. To read the topic:
+
+```bash
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 --topic propostas.status-alterado --from-beginning \
+  --property print.key=true --property print.headers=true
+```
 
 ## GraphQL operations
 
@@ -294,8 +344,14 @@ Persistence integration tests use Testcontainers. In environments without Docker
 
 REST adapter tests (`PropostaRestControllerTest`) use `@WebMvcTest`, MockMvc, and a Mockito mock of `PropostaService`. They check HTTP status codes, the `Location` header, money serialized as text, and RFC 9457 problem details, and they need neither a database nor Docker.
 
+Outbox and messaging tests:
+
+- `PropostaServiceTest` uses in-memory fakes of the `Transacao` and `PublicadorDeEventos` ports to check that each change is published once, in order, after the proposal is saved, and inside the transaction.
+- `PropostaAprovadaListenerTest` checks the Kafka consumer's translation with a Mockito mock, including unknown fields, unknown statuses, and redelivered events.
+- `FluxoOutboxKafkaTest` (`@SpringBootTest` with PostgreSQL and Kafka through Testcontainers, plus Awaitility) checks the whole flow: the outbox row written in the same transaction, the rollback of the proposal and its outbox row together, the relay publishing with the proposal id as the key and an `eventoId` header, the consumer generating the contract, and the inbox ignoring a redelivered event.
+
 ## Next steps
 
-1. Implement the Outbox to store events in the same transaction that updates a proposal.
-2. Create the relay that publishes persisted events to Kafka.
-3. Test the flow and document the Outbox pattern's design decisions and guarantees.
+1. Phase 6: run the application, PostgreSQL, and Kafka with Docker Compose.
+2. Phase 6: put Spring Cloud Gateway in front of the APIs (routing, correlation id, circuit breaker).
+3. Outbox hardening: clean up published rows, take poison messages out of the queue, and compare polling with change data capture (Debezium).
