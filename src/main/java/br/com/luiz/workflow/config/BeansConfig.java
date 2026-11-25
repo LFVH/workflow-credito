@@ -19,7 +19,8 @@ public class BeansConfig {
     }
 
     @Bean
-    ContratoService contratoService(ContratoRepository contratos, PropostaRepository propostas) {
-        return new ContratoService(contratos, propostas);
+    ContratoService contratoService(ContratoRepository contratos, PropostaRepository propostas,
+                                    Transacao transacao) {
+        return new ContratoService(contratos, propostas, transacao);
     }
 }
