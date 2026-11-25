@@ -18,7 +18,8 @@ class ContratoServiceTest {
 
     private final PropostaRepositoryEmMemoria propostas = new PropostaRepositoryEmMemoria();
     private final ContratoRepositoryEmMemoria contratos = new ContratoRepositoryEmMemoria();
-    private final ContratoService service = new ContratoService(contratos, propostas);
+    private final TransacaoDireta transacao = new TransacaoDireta();
+    private final ContratoService service = new ContratoService(contratos, propostas, transacao);
 
     // ===== gerarPara =====
 
@@ -144,6 +145,19 @@ class ContratoServiceTest {
     @Test
     void buscarPorPropostasComColecaoVaziaDevolveListaVazia() {
         assertThat(service.buscarPorPropostas(List.of())).isEmpty();
+    }
+
+    // ===== transação (fase 5) =====
+
+    @Test
+    void gerarEAssinarRodamCadaUmNumaTransacao() {
+        UUID propostaId = propostaAprovada().id();
+
+        Contrato gerado = service.gerarPara(propostaId);
+        service.assinar(gerado.id());
+
+        assertThat(transacao.execucoes()).isEqualTo(2);
+        assertThat(transacao.ativa()).isFalse();
     }
 
     // ===== apoio =====
