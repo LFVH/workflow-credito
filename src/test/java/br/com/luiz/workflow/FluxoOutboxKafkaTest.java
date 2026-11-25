@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
 
+import br.com.luiz.workflow.adapters.in.messaging.PropostaAprovadaListener;
 import br.com.luiz.workflow.application.ContratoService;
 import br.com.luiz.workflow.application.PropostaService;
 import br.com.luiz.workflow.application.port.out.PropostaRepository;
@@ -69,6 +70,7 @@ class FluxoOutboxKafkaTest {
     @Autowired Transacao transacao;
     @Autowired JdbcTemplate jdbc;
     @Autowired ObjectMapper json;
+    @Autowired PropostaAprovadaListener listener;
 
     @Test
     void cadaTransicaoGravaUmEventoNoOutbox() {
@@ -147,6 +149,27 @@ class FluxoOutboxKafkaTest {
         assertThat(contrato.prazoMeses()).isEqualTo(36);
     }
 
+    @Test
+    void reentregaDoMesmoEventoEhIgnoradaPeloInbox() throws Exception {
+        UUID id = aprovada();
+        await().atMost(TEMPO_MAXIMO).untilAsserted(() ->
+            assertThat(contratoService.buscarPorProposta(id)).isPresent());
+
+        Map<String, Object> aprovacao = jdbc.queryForMap("""
+                SELECT id, payload::text AS payload
+                  FROM outbox_evento
+                 WHERE agregado_id = ? AND payload->>'para' = 'APROVADA'
+                """, id);
+        UUID eventoId = (UUID) aprovacao.get("id");
+        // O consumidor registrou o evento na mesma transação em que gerou o contrato.
+        assertThat(registrosNoInbox(eventoId)).isEqualTo(1);
+
+        listener.aoReceber((String) aprovacao.get("payload")); // a "reentrega", com o mesmo eventoId
+
+        assertThat(registrosNoInbox(eventoId)).isEqualTo(1);
+        assertThat(contratoService.buscarPorPropostas(List.of(id))).hasSize(1);
+    }
+
     // ===== apoio =====
 
     /** Cria, envia para análise e aprova pelo caso de uso real (três transações com commit). */
@@ -168,6 +191,12 @@ class FluxoOutboxKafkaTest {
             "SELECT count(*) FROM outbox_evento WHERE agregado_id = ? AND publicado_em IS NULL",
             Integer.class, propostaId);
         return pendentes;
+    }
+
+    private int registrosNoInbox(UUID eventoId) {
+        Integer total = jdbc.queryForObject(
+            "SELECT count(*) FROM evento_processado WHERE evento_id = ?", Integer.class, eventoId);
+        return total;
     }
 
     /** Lê um campo do JSON da mensagem. O jsonb reordena as chaves: compare campos, nunca o texto. */

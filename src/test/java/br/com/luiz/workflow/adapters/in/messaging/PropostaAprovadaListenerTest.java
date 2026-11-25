@@ -1,11 +1,16 @@
 package br.com.luiz.workflow.adapters.in.messaging;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 import br.com.luiz.workflow.application.ContratoService;
+import br.com.luiz.workflow.application.TransacaoDireta;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -15,8 +20,10 @@ import org.junit.jupiter.params.provider.ValueSource;
 class PropostaAprovadaListenerTest {
 
     private final ContratoService contratoService = mock(ContratoService.class);
-    private final PropostaAprovadaListener listener =
-        new PropostaAprovadaListener(contratoService, new ObjectMapper());
+    /** Inbox de mentira: Set.add devolve true só quando o elemento é novo, o contrato de registrarSeNovo. */
+    private final Set<UUID> processados = new HashSet<>();
+    private final PropostaAprovadaListener listener = new PropostaAprovadaListener(
+        contratoService, new TransacaoDireta(), processados::add, new ObjectMapper());
 
     @Test
     void propostaAprovadaGeraOContrato() throws Exception {
@@ -33,6 +40,7 @@ class PropostaAprovadaListenerTest {
         listener.aoReceber(mensagem(UUID.randomUUID(), UUID.randomUUID(), para));
 
         verifyNoInteractions(contratoService);
+        assertThat(processados).isEmpty(); // status que não interessa nem ocupa o inbox
     }
 
     @Test
@@ -46,6 +54,19 @@ class PropostaAprovadaListenerTest {
         listener.aoReceber(comCamposNovos);
 
         verify(contratoService).gerarPara(propostaId);
+    }
+
+    @Test
+    void mensagemReentregueNaoChamaOServicoDeNovo() throws Exception {
+        UUID eventoId = UUID.randomUUID();
+        UUID propostaId = UUID.randomUUID();
+        String mensagem = mensagem(eventoId, propostaId, "APROVADA");
+
+        listener.aoReceber(mensagem);
+        listener.aoReceber(mensagem); // o Kafka entregou de novo: mesmo eventoId
+
+        verify(contratoService, times(1)).gerarPara(propostaId);
+        assertThat(processados).containsExactly(eventoId);
     }
 
     /** A mensagem como o relay publica (formato do jsonb: chaves reordenadas, com espaços). */
