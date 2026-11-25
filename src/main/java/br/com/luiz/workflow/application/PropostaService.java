@@ -1,6 +1,9 @@
 package br.com.luiz.workflow.application;
 
 import br.com.luiz.workflow.application.port.out.PropostaRepository;
+import br.com.luiz.workflow.application.port.out.PublicadorDeEventos;
+import br.com.luiz.workflow.application.port.out.Transacao;
+import br.com.luiz.workflow.domain.MudancaDeStatus;
 import br.com.luiz.workflow.domain.Proposta;
 import java.math.BigDecimal;
 import java.util.List;
@@ -8,6 +11,11 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 
+/**
+ * Casos de uso da proposta. Java puro, sem anotações do Spring: a transação vem do
+ * port {@link Transacao} e os eventos saem pelo port {@link PublicadorDeEventos}
+ * (que, em produção, grava no outbox dentro da mesma transação).
+ */
 public class PropostaService {
 
     /** Tamanho da página quando o cliente não informa o limite. */
@@ -17,13 +25,19 @@ public class PropostaService {
     public static final int LIMITE_MAXIMO = 100;
 
     private final PropostaRepository repository;
+    private final PublicadorDeEventos publicador;
+    private final Transacao transacao;
 
-    public PropostaService(PropostaRepository repository) {
+    public PropostaService(PropostaRepository repository, PublicadorDeEventos publicador,
+                           Transacao transacao) {
         this.repository = repository;
+        this.publicador = publicador;
+        this.transacao = transacao;
     }
 
     public Proposta criar(BigDecimal valor, int prazoMeses) {
-        return repository.salvar(Proposta.nova(valor, prazoMeses));
+        Proposta nova = Proposta.nova(valor, prazoMeses); // valida ANTES de abrir a transação
+        return transacao.executar(() -> repository.salvar(nova));
     }
 
     public Proposta enviarParaAnalise(UUID id)  { return transicionar(id, Proposta::enviarParaAnalise); }
@@ -36,6 +50,7 @@ public class PropostaService {
         return transicionar(id, proposta -> proposta.cancelar(motivo));
     }
 
+    /** Leitura de uma consulta só: atômica por natureza, fica fora da transação. */
     public Optional<Proposta> buscar(UUID id) {
         return repository.buscarPorId(id);
     }
@@ -55,10 +70,21 @@ public class PropostaService {
         return repository.listar(depoisDe, tamanho);
     }
 
+    /**
+     * Buscar, mudar, gravar e publicar numa transação só. A ordem importa:
+     * os eventos são retirados do objeto ALTERADO (o salvar devolve uma cópia nova, sem eventos)
+     * e publicados DEPOIS do salvar: um conflito de versão no salvar não deixa evento
+     * de uma mudança que não aconteceu.
+     */
     private Proposta transicionar(UUID id, Consumer<Proposta> acao) {
-        Proposta proposta = repository.buscarPorId(id)
-            .orElseThrow(() -> new PropostaNaoEncontradaException(id));
-        acao.accept(proposta);
-        return repository.salvar(proposta);
+        return transacao.executar(() -> {
+            Proposta proposta = repository.buscarPorId(id)
+                .orElseThrow(() -> new PropostaNaoEncontradaException(id));
+            acao.accept(proposta);
+            List<MudancaDeStatus> eventos = proposta.retirarEventos();
+            Proposta salva = repository.salvar(proposta);
+            publicador.publicar(eventos);
+            return salva;
+        });
     }
 }
