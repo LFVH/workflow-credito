@@ -37,6 +37,11 @@
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-data-jpa</artifactId>
     </dependency>
+    <!-- Fase 5: KafkaTemplate, @KafkaListener, KafkaAdmin. Versao (3.3.x) gerenciada pelo Boot. -->
+    <dependency>
+      <groupId>org.springframework.kafka</groupId>
+      <artifactId>spring-kafka</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.springdoc</groupId>
       <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
@@ -78,6 +83,18 @@
     <dependency>
       <groupId>org.springframework.graphql</groupId>
       <artifactId>spring-graphql-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Fase 5: Kafka de verdade nos testes (org.testcontainers.kafka.KafkaContainer) -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>kafka</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- Fase 5: esperar efeitos assincronos (relay, consumidor) sem Thread.sleep -->
+    <dependency>
+      <groupId>org.awaitility</groupId>
+      <artifactId>awaitility</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>
