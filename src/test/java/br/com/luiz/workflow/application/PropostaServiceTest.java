@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import br.com.luiz.workflow.adapters.out.memory.PropostaRepositoryEmMemoria;
+import br.com.luiz.workflow.application.port.out.PublicadorDeEventos;
+import br.com.luiz.workflow.domain.MudancaDeStatus;
 import br.com.luiz.workflow.domain.Proposta;
 import br.com.luiz.workflow.domain.StatusProposta;
 import br.com.luiz.workflow.domain.TransicaoInvalidaException;
@@ -19,7 +21,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 class PropostaServiceTest {
 
     private final RepositorioComOperacaoConcorrente repository = new RepositorioComOperacaoConcorrente();
-    private final PropostaService service = new PropostaService(repository);
+    private final PublicadorDeEventosEmMemoria publicador = new PublicadorDeEventosEmMemoria();
+    private final TransacaoDireta transacao = new TransacaoDireta();
+    private final PropostaService service = new PropostaService(repository, publicador, transacao);
 
     @Test
     void criaPropostaEmRascunhoEPersiste() {
@@ -174,6 +178,97 @@ class PropostaServiceTest {
 
         // No banco, criada_em não muda no UPDATE: a primeira continua primeira.
         assertThat(ids(service.listar(null, 10))).containsExactlyElementsOf(criadas);
+    }
+
+    // ===== eventos e transação (fase 5) =====
+
+    @Test
+    void criarNaoPublicaEvento() {
+        service.criar(new BigDecimal("5000"), 12);
+
+        assertThat(publicador.publicados()).isEmpty();
+    }
+
+    @Test
+    void transicaoPublicaAMudancaDeStatus() {
+        UUID id = service.criar(new BigDecimal("5000"), 12).id();
+
+        service.enviarParaAnalise(id);
+
+        assertThat(publicador.publicados()).containsExactly(
+            new MudancaDeStatus(id, StatusProposta.RASCUNHO, StatusProposta.EM_ANALISE));
+    }
+
+    @Test
+    void cadaMudancaEhPublicadaUmaVezSoENaOrdem() {
+        UUID id = service.criar(new BigDecimal("5000"), 12).id();
+
+        service.enviarParaAnalise(id);
+        service.pedirDocumentos(id);
+        service.enviarParaAnalise(id);
+        service.aprovar(id);
+
+        assertThat(publicador.publicados()).containsExactly(
+            new MudancaDeStatus(id, StatusProposta.RASCUNHO, StatusProposta.EM_ANALISE),
+            new MudancaDeStatus(id, StatusProposta.EM_ANALISE, StatusProposta.PENDENTE_DOCUMENTOS),
+            new MudancaDeStatus(id, StatusProposta.PENDENTE_DOCUMENTOS, StatusProposta.EM_ANALISE),
+            new MudancaDeStatus(id, StatusProposta.EM_ANALISE, StatusProposta.APROVADA));
+    }
+
+    @Test
+    void transicaoInvalidaNaoPublicaNada() {
+        UUID id = service.criar(new BigDecimal("5000"), 12).id();
+
+        assertThatThrownBy(() -> service.aprovar(id)).isInstanceOf(TransicaoInvalidaException.class);
+
+        assertThat(publicador.publicados()).isEmpty();
+    }
+
+    @Test
+    void conflitoDeVersaoNaoPublicaOEventoDeQuemPerdeu() {
+        UUID id = service.criar(new BigDecimal("5000"), 12).id();
+        service.enviarParaAnalise(id);
+        repository.depoisDaProximaBusca(() -> service.cancelar(id, "Cliente desistiu"));
+
+        assertThatThrownBy(() -> service.aprovar(id))
+            .isInstanceOf(PropostaDesatualizadaException.class);
+
+        // Só vira evento o que foi gravado: o cancelamento. A aprovação recusada, não.
+        assertThat(publicador.publicados()).extracting(MudancaDeStatus::para)
+            .containsExactly(StatusProposta.EM_ANALISE, StatusProposta.CANCELADA);
+    }
+
+    @Test
+    void salvarEPublicarAcontecemNessaOrdemDentroDaTransacao() {
+        List<String> chamadas = new ArrayList<>();
+        PropostaRepositoryEmMemoria repositorioQueAnota = new PropostaRepositoryEmMemoria() {
+            @Override
+            public synchronized Proposta salvar(Proposta proposta) {
+                chamadas.add("salvar, transação ativa: " + transacao.ativa());
+                return super.salvar(proposta);
+            }
+        };
+        PublicadorDeEventos publicadorQueAnota =
+            eventos -> chamadas.add("publicar, transação ativa: " + transacao.ativa());
+        PropostaService anotado = new PropostaService(repositorioQueAnota, publicadorQueAnota, transacao);
+
+        UUID id = anotado.criar(new BigDecimal("5000"), 12).id();
+        anotado.enviarParaAnalise(id);
+
+        assertThat(chamadas).containsExactly(
+            "salvar, transação ativa: true",     // criar
+            "salvar, transação ativa: true",     // enviarParaAnalise: primeiro grava...
+            "publicar, transação ativa: true");  // ...depois publica, na mesma transação
+    }
+
+    @Test
+    void cadaEscritaRodaNumaTransacaoPropria() {
+        UUID id = service.criar(new BigDecimal("5000"), 12).id();
+        service.enviarParaAnalise(id);
+        service.aprovar(id);
+
+        assertThat(transacao.execucoes()).isEqualTo(3);
+        assertThat(transacao.ativa()).isFalse(); // nenhuma ficou aberta
     }
 
     // ===== apoio =====
