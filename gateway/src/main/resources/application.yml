@@ -10,12 +10,36 @@ spring:
     gateway:
       server:
         webflux:            # prefixo novo do Spring Cloud Gateway 4.3 (Spring Cloud 2025.0)
+          httpclient:
+            connect-timeout: 2000   # ms para abrir a conexão com a aplicação
+            response-timeout: 4s    # espera máxima pela resposta (menor que o time limiter)
           routes:
             # Uma aplicação atrás do gateway => uma rota. Os três padrões vão para o mesmo destino.
             - id: workflow
               uri: ${APP_URI:http://localhost:8080}
               predicates:
                 - Path=/api/**,/graphql,/graphiql/**
+              filters:
+                # Falha, demora ou circuito aberto => reencaminha para o FallbackController (503)
+                - name: CircuitBreaker
+                  args:
+                    name: workflow
+                    fallbackUri: forward:/fallback/aplicacao
+
+# Resilience4j. "configs.default" vale para todo circuit breaker sem configuração própria.
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-size: 10                     # olha as últimas 10 chamadas
+        minimum-number-of-calls: 5                  # só decide depois de 5
+        failure-rate-threshold: 50                  # abre com 50% ou mais de falhas
+        wait-duration-in-open-state: 10s            # aberto por 10 s (= Retry-After do fallback)
+        permitted-number-of-calls-in-half-open-state: 2   # 2 chamadas de teste no meio-aberto
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 5s                        # o padrão é 1 s: curto demais
 
 # Actuator: só o health fica exposto na web (é o que o healthcheck do compose chama).
 # Nunca exponha o endpoint "gateway" sem autenticação (CVE-2025-41243 e CVE-2025-41253).
