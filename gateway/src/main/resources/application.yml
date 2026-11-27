@@ -6,6 +6,16 @@ server:
 spring:
   application:
     name: workflow-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:            # prefixo novo do Spring Cloud Gateway 4.3 (Spring Cloud 2025.0)
+          routes:
+            # Uma aplicação atrás do gateway => uma rota. Os três padrões vão para o mesmo destino.
+            - id: workflow
+              uri: ${APP_URI:http://localhost:8080}
+              predicates:
+                - Path=/api/**,/graphql,/graphiql/**
 
 # Actuator: só o health fica exposto na web (é o que o healthcheck do compose chama).
 # Nunca exponha o endpoint "gateway" sem autenticação (CVE-2025-41243 e CVE-2025-41253).
