@@ -1,0 +1,16 @@
+# Porta local 8000: no notebook, a 8080 é da aplicação.
+# Na imagem Docker do gateway, SERVER_PORT=8080 (Dockerfile) sobrescreve este valor.
+server:
+  port: 8000
+
+spring:
+  application:
+    name: workflow-gateway
+
+# Actuator: só o health fica exposto na web (é o que o healthcheck do compose chama).
+# Nunca exponha o endpoint "gateway" sem autenticação (CVE-2025-41243 e CVE-2025-41253).
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

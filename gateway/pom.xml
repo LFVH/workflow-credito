@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- Mesmo Spring Boot da aplicação. O gateway é um projeto SEPARADO (não é módulo
+       do pom.xml raiz): reativo (WebFlux + Netty), com ciclo de vida próprio. -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.5.6</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>br.com.luiz</groupId>
+  <artifactId>workflow-gateway</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+
+  <properties>
+    <java.version>21</java.version>
+    <!-- Release train do Spring Cloud compatível com o Spring Boot 3.5.x. A 2025.0.3 traz o
+         gateway 4.3.5, com as correções de segurança da linha 4.3 (a 2025.0.0 traz o 4.3.0). -->
+    <spring-cloud.version>2025.0.3</spring-cloud.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <!-- BOM: fixa as versões de todos os projetos Spring Cloud de uma vez -->
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>${spring-cloud.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!-- O gateway reativo. Nome novo desde o Spring Cloud 2025.0
+         (o antigo spring-cloud-starter-gateway está depreciado). Traz o spring-boot-starter-webflux. -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-gateway-server-webflux</artifactId>
+    </dependency>
+    <!-- Filtro CircuitBreaker com Resilience4j (circuit breaker + time limiter), versão reativa -->
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
+    </dependency>
+    <!-- /actuator/health para o healthcheck do Docker Compose -->
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>
+</project>
