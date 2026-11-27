@@ -1,0 +1,6 @@
+# Lista de PERMITIDOS: ignora tudo e libera só o que o Dockerfile copia.
+# Nada entra no contexto do build por acidente: .git, target, estudo, docs, gateway,
+# um .env esquecido. O próprio Dockerfile é lido pelo Docker mesmo ignorado aqui.
+*
+!pom.xml
+!src

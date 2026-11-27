@@ -1,0 +1,4 @@
+# Lista de PERMITIDOS (o contexto do build é a pasta gateway/).
+*
+!pom.xml
+!src
