@@ -10,6 +10,11 @@ spring:
     gateway:
       server:
         webflux:            # prefixo novo do Spring Cloud Gateway 4.3 (Spring Cloud 2025.0)
+          # X-Forwarded-* e Forwarded só para quem conecta a partir destes endereços (regex Java).
+          # Sem esta propriedade, o gateway APAGA esses headers (padrão seguro desde a 4.3).
+          # Padrão: a própria máquina (testes e execução local). No compose: GATEWAY_TRUSTED_PROXIES.
+          # Aspas simples: no YAML, as barras invertidas ficam como estão.
+          trusted-proxies: '${GATEWAY_TRUSTED_PROXIES:127\.0\.0\.1|0:0:0:0:0:0:0:1}'
           httpclient:
             connect-timeout: 2000   # ms para abrir a conexão com a aplicação
             response-timeout: 4s    # espera máxima pela resposta (menor que o time limiter)
