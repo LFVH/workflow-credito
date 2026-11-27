@@ -3,11 +3,13 @@ package br.com.luiz.gateway;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import br.com.luiz.gateway.BackendFalso.Recebida;
+import com.sun.net.httpserver.Headers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -35,6 +37,9 @@ class RoteamentoGatewayTest {
 
     @Autowired
     WebTestClient http;
+
+    @LocalServerPort
+    int portaDoGateway;
 
     @BeforeEach
     void esquecerRequisicoesAnteriores() {
@@ -136,5 +141,18 @@ class RoteamentoGatewayTest {
             .expectHeader().valueMatches(REQUEST_ID, UUID);
 
         assertThat(aplicacao.proxima().headers().getFirst(REQUEST_ID)).matches(UUID);
+    }
+
+    // ----------------------------------------------------------- X-Forwarded
+
+    @Test
+    void contaParaAAplicacaoQualEraOEnderecoOriginal() {
+        http.get().uri("/graphiql")
+            .exchange()
+            .expectStatus().isOk();
+
+        Headers recebidos = aplicacao.proxima().headers();
+        assertThat(recebidos.getFirst("X-Forwarded-Host")).isEqualTo("localhost:" + portaDoGateway);
+        assertThat(recebidos.getFirst("X-Forwarded-Proto")).isEqualTo("http");
     }
 }
