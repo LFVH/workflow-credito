@@ -29,3 +29,9 @@ The REST API reports errors as [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457
 ## Malformed requests
 
 Invalid JSON, an id that is not a UUID, a missing request body, an unsupported method or media type return `400`, `405`, or `415` with Spring Boot's default problem type, `about:blank`.
+
+## servico-indisponivel
+
+- **Status:** 503 Service Unavailable, sent by the API gateway (not by the application).
+- **When:** the application is down or starting, did not answer within the gateway timeout, or the gateway's circuit breaker is open after repeated failures. Here `instance` is the gateway's fallback endpoint; the `requestId` member and the `X-Request-Id` header identify the original request.
+- **Client action:** retry after the number of seconds in the `Retry-After` header. A timeout does not prove that the operation did not happen: before repeating a non-idempotent action (for example, approving or cancelling a proposal), read the resource again. Quote the `X-Request-Id` when reporting the problem.

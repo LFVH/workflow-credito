@@ -2,7 +2,7 @@
 
 A practical study project about a credit application workflow, built to explore Java, Spring Boot, hexagonal architecture, relational persistence, testing, and messaging in a financial domain.
 
-> **Current status:** Phases 1, 2, 3, and 5 are complete. The numbering follows the original plan: Phase 4 (the GraphQL API) was brought forward into Phase 2. The application includes the domain and use cases, GraphQL and REST APIs, PostgreSQL persistence with JPA and Flyway, the `Contrato` aggregate, and domain events published to Kafka through a transactional outbox. Phase 6 will run the whole stack with Docker Compose behind Spring Cloud Gateway.
+> **Current status:** Phases 1 to 6 are complete. The application includes the domain and use cases, GraphQL and REST APIs, PostgreSQL persistence with JPA and Flyway, the Outbox pattern with Kafka, and a Docker Compose setup in which a Spring Cloud Gateway is the single entry point.
 
 ## Goal
 
@@ -107,6 +107,15 @@ sequenceDiagram
     L->>DB: INSERT INTO contrato (only if the proposal has none)
 ```
 
+### Phase 6: Docker Compose and API gateway
+
+- The application is packaged by a multi-stage `Dockerfile`: Maven and the JDK exist only in the build stage; the runtime image has the Temurin 21 JRE, the Spring Boot layers (dependencies first, application code last), and a non-root user. The heap size follows the container memory limit (`-XX:MaxRAMPercentage`).
+- `compose.yaml` starts PostgreSQL, Kafka, the application, and the gateway with one command. Services start in order using health checks (`pg_isready`, the Kafka API, and Spring Boot Actuator `/actuator/health`).
+- The gateway (`gateway/`) is a separate Spring Boot project built with Spring Cloud Gateway (WebFlux). It is the only service with a published port (8080); the application is reachable only inside the Compose network.
+- Cross-cutting concerns live in the gateway: every request gets an `X-Request-Id` (generated, or validated and propagated) that is sent to the application, returned to the client, and logged; a Resilience4j circuit breaker with timeouts answers `503 Service Unavailable` as an RFC 9457 problem detail with `Retry-After` when the application is down or slow.
+- The gateway forwards `X-Forwarded-*` headers only from trusted proxies (`spring.cloud.gateway.server.webflux.trusted-proxies`), and the application honors them (`server.forward-headers-strategy=framework`), so redirects and `Location` headers point to the public address instead of `app:8080`.
+- CI also runs the gateway tests and builds both Docker images.
+
 ## State machine
 
 | Current state | Allowed next states |
@@ -129,6 +138,29 @@ Contract (`Contrato`), created from an approved proposal:
 | `CANCELADO` | None (final) |
 
 An active contract cannot be cancelled: the money has already been disbursed, so it can only be settled (`LIQUIDADO`). Cancelling requires a reason.
+
+## Containers
+
+```mermaid
+flowchart LR
+    client(["Client<br/>browser, curl, front end"])
+    subgraph compose["Docker Compose network"]
+        gateway["gateway<br/>Spring Cloud Gateway<br/>X-Request-Id, circuit breaker"]
+        app["app<br/>Spring Boot<br/>GraphQL, REST, outbox relay, consumer"]
+        postgres[("postgres<br/>PostgreSQL 16")]
+        kafka[["kafka<br/>Apache Kafka, KRaft"]]
+    end
+    client -- "localhost:8080 (only published port)" --> gateway
+    gateway -- "http://app:8080" --> app
+    app -- "JDBC postgres:5432" --> postgres
+    app -- "kafka:29092" --> kafka
+```
+
+Only the gateway publishes a port. PostgreSQL and Kafka publish ports bound to `127.0.0.1`, for local inspection only.
+
+### Why Spring Cloud Gateway instead of Kong
+
+Kong is a strong choice for polyglot platforms (Nginx-based, a large plugin ecosystem, an admin API). Here the gateway stays in the same stack as the application: Java 21, Spring Boot, Maven, and the same CI, with filters written in Java and tested with JUnit and `WebTestClient` (including the fallback with the backend down), without a separate plugin language or a database for the gateway.
 
 ## Architecture and structure
 
@@ -171,6 +203,16 @@ src/test/java/br/com/luiz/workflow/
 |-- adapters/out/outbox/                 # Outbox adapter tests (PostgreSQL via Testcontainers)
 |-- FluxoOutboxKafkaTest.java            # End-to-end outbox, Kafka, and consumer test
 `-- adapters/out/persistence/            # JPA/PostgreSQL integration tests
+
+gateway/                                 # API gateway: separate Spring Boot project
+|-- pom.xml
+|-- Dockerfile
+`-- src/main/java/br/com/luiz/gateway/
+    |-- GatewayApplication.java
+    |-- CorrelationIdFilter.java         # X-Request-Id: generate or propagate, and log
+    `-- FallbackController.java          # 503 problem detail when the application is down
+Dockerfile                               # Multi-stage image of the application
+compose.yaml                             # postgres, kafka, app, gateway
 ```
 
 ## Requirements
@@ -179,6 +221,7 @@ src/test/java/br/com/luiz/workflow/
 - Maven 3.6.3 or later
 - PostgreSQL to run the application (`localhost:5432` by default, database `workflow_db`)
 - Docker, only for the Kafka flow and the Testcontainers tests. GitHub Codespaces (configured in `.devcontainer/`) and GitHub Actions provide it. Without Docker, those tests are skipped and the application still runs, without Kafka.
+- Docker with Compose v2 to run the whole system (for example, in GitHub Codespaces with the dev container in `.devcontainer/`)
 
 The port and credentials can be configured through the `DB_PORT`, `DB_USER` and `DB_PASSWORD` environment variables; the port defaults to `5432`, and the user and password default to `postgres`. Flyway migrations are applied when the application starts.
 
@@ -202,7 +245,7 @@ Once the application is running, open:
 `compose.yaml` starts PostgreSQL (port 5432) and a single-node Kafka in KRaft mode (port 9092). The outbox relay and the Kafka consumer are switched on with environment variables:
 
 ```bash
-docker compose up -d --wait
+docker compose up -d --wait postgres kafka
 OUTBOX_RELAY=true KAFKA_LISTENERS=true mvn spring-boot:run
 ```
 
@@ -213,6 +256,21 @@ docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 --topic propostas.status-alterado --from-beginning \
   --property print.key=true --property print.headers=true
 ```
+
+## Run with Docker Compose
+
+```bash
+docker compose up --build --wait
+docker compose ps
+```
+
+Everything goes through the gateway on port 8080:
+
+- GraphiQL: `http://localhost:8080/graphiql?path=/graphql`
+- GraphQL endpoint: `http://localhost:8080/graphql`
+- REST API: `http://localhost:8080/api/propostas`
+
+Stop with `docker compose down` (add `-v` to also delete the PostgreSQL volume).
 
 ## GraphQL operations
 
@@ -350,8 +408,12 @@ Outbox and messaging tests:
 - `PropostaAprovadaListenerTest` checks the Kafka consumer's translation with a Mockito mock, including unknown fields, unknown statuses, and redelivered events.
 - `FluxoOutboxKafkaTest` (`@SpringBootTest` with PostgreSQL and Kafka through Testcontainers, plus Awaitility) checks the whole flow: the outbox row written in the same transaction, the rollback of the proposal and its outbox row together, the relay publishing with the proposal id as the key and an `eventoId` header, the consumer generating the contract, and the inbox ignoring a redelivered event.
 
+Gateway tests do not need Docker (a JDK HTTP server plays the application): `mvn -f gateway/pom.xml test`.
+
 ## Next steps
 
-1. Phase 6: run the application, PostgreSQL, and Kafka with Docker Compose.
-2. Phase 6: put Spring Cloud Gateway in front of the APIs (routing, correlation id, circuit breaker).
-3. Outbox hardening: clean up published rows, take poison messages out of the queue, and compare polling with change data capture (Debezium).
+Optional extensions:
+
+1. Rate limiting with Redis and JWT validation at the gateway.
+2. Kubernetes with kind (liveness and readiness probes from Spring Boot Actuator).
+3. LocalStack (SQS or S3).
